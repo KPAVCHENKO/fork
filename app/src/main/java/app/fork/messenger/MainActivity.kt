@@ -21,7 +21,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.fork.messenger.notify.NotificationsCenter
-import app.fork.messenger.service.ConnectionService
 import app.fork.messenger.ui.ForkTheme
 
 class MainActivity : ComponentActivity() {
@@ -40,7 +39,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         ensureNotificationPermission()
-        ConnectionService.start(this)
         handleIntent(intent)
 
         setContent {

@@ -32,13 +32,12 @@ object NotificationsCenter {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_SERVICE, "Соединение", NotificationManager.IMPORTANCE_MIN),
-            )
-            manager.createNotificationChannel(
                 NotificationChannel(CHANNEL_MESSAGES, "Сообщения", NotificationManager.IMPORTANCE_HIGH).apply {
                     enableVibration(true)
                 },
             )
+            // Канал старого фонового сервиса больше не нужен (перешли на FCM-пуши).
+            runCatching { manager.deleteNotificationChannel(CHANNEL_SERVICE) }
         }
     }
 

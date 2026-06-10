@@ -170,6 +170,11 @@ object TdClient {
             is TdApi.AuthorizationStateReady -> {
                 _authState.value = AuthUiState.Ready
                 ChatStore.loadChats()
+                // Подписка на пуши: дальше сервер Telegram будит нас через Firebase.
+                runCatching {
+                    com.google.firebase.messaging.FirebaseMessaging.getInstance().token
+                        .addOnSuccessListener { token -> registerPushToken(token) }
+                }.onFailure { Log.w(TAG, "FCM unavailable: ${it.message}") }
                 client?.send(TdApi.GetMe()) { result ->
                     if (result is TdApi.User) {
                         _myName.value = listOf(result.firstName, result.lastName)
@@ -226,6 +231,24 @@ object TdClient {
     /** Пере-применить прокси (например, после обновления конфига с GitHub). */
     fun reapplyProxy() {
         if (::appContext.isInitialized) ensureProxy()
+    }
+
+    /** Регистрирует FCM-токен: после этого сервер Telegram шлёт пуши сам. */
+    fun registerPushToken(token: String) {
+        client?.send(
+            TdApi.RegisterDevice(TdApi.DeviceTokenFirebaseCloudMessaging(token, true), LongArray(0)),
+        ) { result ->
+            if (result is TdApi.Error) {
+                Log.w(TAG, "registerDevice failed: ${result.message}")
+            } else {
+                Log.i(TAG, "push token registered")
+            }
+        }
+    }
+
+    /** Передаёт TDLib полезную нагрузку пуша (зашифрованную Telegram). */
+    fun processPushPayload(payload: String) {
+        client?.send(TdApi.ProcessPushNotification(payload), null)
     }
 
     private fun ensureProxy() {
