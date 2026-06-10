@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +40,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -48,9 +50,11 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -58,6 +62,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -76,6 +81,7 @@ import app.fork.messenger.media.VoiceContent
 import app.fork.messenger.SettingsStore
 import app.fork.messenger.ui.senderColor
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 
 /** Экран переписки. */
@@ -94,7 +100,16 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit) {
 
     var mediaTarget by remember { mutableStateOf<MediaTarget?>(null) }
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val reversed = messages.asReversed()
+
+    // Автопрокрутка к новому сообщению, если пользователь уже у низа.
+    val newestId = reversed.firstOrNull()?.id
+    LaunchedEffect(newestId) {
+        if (newestId != null && listState.firstVisibleItemIndex <= 2) {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     // Когда прокрутили к самым старым сообщениям — догружаем историю.
     LaunchedEffect(listState) {
@@ -140,6 +155,26 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit) {
                             CircularProgressIndicator(Modifier.size(24.dp))
                         }
                     }
+                }
+            }
+
+            // Кнопка «вниз» появляется, когда прокрутили вверх.
+            val showScrollDown by remember {
+                derivedStateOf { listState.firstVisibleItemIndex > 3 }
+            }
+            if (showScrollDown) {
+                SmallFloatingActionButton(
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ) {
+                    Icon(
+                        app.fork.messenger.ui.ForkIcons.Download,
+                        contentDescription = "вниз",
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }
@@ -205,6 +240,7 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
                 BubbleText(
                     text = if (caption != null) caption else message.text,
                     time = message.time,
+                    status = message.outStatus,
                     hasMediaAbove = content !is TdApi.MessageText,
                     showText = content is TdApi.MessageText || caption != null,
                 )
@@ -255,16 +291,20 @@ private fun BubbleMedia(content: TdApi.MessageContent?, onOpenMedia: (MediaTarge
 }
 
 @Composable
-private fun BubbleText(text: String, time: String, hasMediaAbove: Boolean, showText: Boolean) {
+private fun BubbleText(
+    text: String,
+    time: String,
+    status: app.fork.messenger.OutStatus,
+    hasMediaAbove: Boolean,
+    showText: Boolean,
+) {
     if (!showText) {
-        // Только время в углу медиа без подписи.
-        Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        ) {
             Spacer(Modifier.weight(1f))
-            Text(
-                text = time,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            )
+            TimeStatus(time, status)
         }
         return
     }
@@ -278,11 +318,37 @@ private fun BubbleText(text: String, time: String, hasMediaAbove: Boolean, showT
             modifier = Modifier.weight(1f, fill = false),
         )
         Spacer(Modifier.padding(start = 8.dp))
+        TimeStatus(time, status)
+    }
+}
+
+/** Время + галочка статуса (для своих сообщений). */
+@Composable
+private fun TimeStatus(time: String, status: app.fork.messenger.OutStatus) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = time,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
         )
+        val icon = when (status) {
+            app.fork.messenger.OutStatus.SENDING -> app.fork.messenger.ui.ForkIcons.Clock
+            app.fork.messenger.OutStatus.SENT -> app.fork.messenger.ui.ForkIcons.Check
+            app.fork.messenger.OutStatus.READ -> app.fork.messenger.ui.ForkIcons.CheckDouble
+            app.fork.messenger.OutStatus.FAILED -> app.fork.messenger.ui.ForkIcons.Clock
+            app.fork.messenger.OutStatus.NONE -> null
+        }
+        if (icon != null) {
+            Spacer(Modifier.width(3.dp))
+            Icon(
+                icon,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = if (status == app.fork.messenger.OutStatus.READ)
+                    MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            )
+        }
     }
 }
 
@@ -302,15 +368,23 @@ private fun MessageInput() {
     var text by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
 
-    // Выбор фото из галереи (системный пикер, без доступа ко всей галерее).
-    val pickPhoto = rememberLauncherForActivityResult(
+    // Выбор фото/видео из галереи (системный пикер, без доступа ко всей галерее).
+    val pickMedia = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         if (uri != null) {
-            val file = MediaSend.copyToCache(context, uri, "jpg")
-            if (file != null) {
-                val (w, h) = MediaSend.imageSize(file.absolutePath)
-                MessageStore.sendPhoto(file.absolutePath, w, h)
+            if (MediaSend.isVideo(context, uri)) {
+                val file = MediaSend.copyToCache(context, uri, "mp4")
+                if (file != null) {
+                    val info = MediaSend.videoInfo(file.absolutePath)
+                    MessageStore.sendVideo(file.absolutePath, info.width, info.height, info.durationSeconds)
+                }
+            } else {
+                val file = MediaSend.copyToCache(context, uri, "jpg")
+                if (file != null) {
+                    val (w, h) = MediaSend.imageSize(file.absolutePath)
+                    MessageStore.sendPhoto(file.absolutePath, w, h)
+                }
             }
         }
     }
@@ -344,8 +418,8 @@ private fun MessageInput() {
         ) {
             IconButton(
                 onClick = {
-                    pickPhoto.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    pickMedia.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
                     )
                 },
                 modifier = Modifier.size(48.dp),
@@ -374,22 +448,72 @@ private fun MessageInput() {
                 maxLines = 5,
             )
             Spacer(Modifier.padding(start = 6.dp))
-            FilledIconButton(
-                onClick = { submit() },
-                enabled = text.isNotBlank(),
-                modifier = Modifier.size(48.dp),
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                ),
-            ) {
-                Icon(
-                    app.fork.messenger.ui.ForkIcons.Send,
-                    contentDescription = "отправить",
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                )
+            if (text.isNotBlank()) {
+                FilledIconButton(
+                    onClick = { submit() },
+                    modifier = Modifier.size(48.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Icon(
+                        app.fork.messenger.ui.ForkIcons.Send,
+                        contentDescription = "отправить",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
+            } else {
+                VoiceButton(context)
             }
         }
         }
+    }
+}
+
+/** Кнопка-микрофон: удерживай для записи голосового, отпусти — отправить. */
+@Composable
+private fun VoiceButton(context: android.content.Context) {
+    val recording by app.fork.messenger.media.VoiceRecorder.recording.collectAsStateWithLifecycle()
+    var hasPermission by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.RECORD_AUDIO,
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val askPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted -> hasPermission = granted }
+
+    FilledIconButton(
+        onClick = {},
+        modifier = Modifier
+            .size(48.dp)
+            .pointerInput(hasPermission) {
+                detectTapGestures(
+                    onLongPress = {},
+                    onPress = {
+                        if (!hasPermission) {
+                            askPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+                            return@detectTapGestures
+                        }
+                        val started = app.fork.messenger.media.VoiceRecorder.start(context)
+                        if (started) {
+                            tryAwaitRelease()
+                            app.fork.messenger.media.VoiceRecorder.stopAndSend()
+                        }
+                    },
+                )
+            },
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = if (recording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+        ),
+    ) {
+        Icon(
+            app.fork.messenger.ui.ForkIcons.Mic,
+            contentDescription = "записать голосовое",
+            tint = MaterialTheme.colorScheme.onPrimary,
+        )
     }
 }
 

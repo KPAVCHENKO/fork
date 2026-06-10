@@ -19,7 +19,11 @@ data class UiMessage(
     val replyText: String?,
     val canDelete: Boolean,
     val canDeleteForAll: Boolean,
+    val outStatus: OutStatus,
 )
+
+/** Статус исходящего сообщения для галочек. */
+enum class OutStatus { NONE, SENDING, FAILED, SENT, READ }
 
 /** Черновик ответа: на какое сообщение отвечаем и как его показать в превью. */
 data class ReplyDraft(val messageId: Long, val preview: String, val sender: String?)
@@ -33,6 +37,7 @@ object MessageStore {
     private var isGroup = false
     private var chatCanDeleteForSelf = false
     private var chatCanDeleteForAll = false
+    private var lastReadOutbox = 0L
     private val msgs = ArrayList<TdApi.Message>() // отсортированы по возрастанию id
 
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
@@ -64,6 +69,7 @@ object MessageStore {
             (type is TdApi.ChatTypeSupergroup && !type.isChannel)
         chatCanDeleteForSelf = chat?.canBeDeletedOnlyForSelf == true
         chatCanDeleteForAll = chat?.canBeDeletedForAllUsers == true
+        lastReadOutbox = chat?.lastReadOutboxMessageId ?: 0L
 
         app.fork.messenger.notify.NotificationsCenter.clearForChat(id)
         TdClient.send(TdApi.OpenChat(id))
@@ -242,6 +248,11 @@ object MessageStore {
                     rebuild()
                 }
             }
+
+            is TdApi.UpdateChatReadOutbox -> ifCurrent(obj.chatId) {
+                lastReadOutbox = obj.lastReadOutboxMessageId
+                rebuild()
+            }
         }
     }
 
@@ -280,6 +291,13 @@ object MessageStore {
                     ?: if (replyTo != null) "Сообщение" else null,
                 canDelete = chatCanDeleteForSelf || chatCanDeleteForAll || m.isOutgoing,
                 canDeleteForAll = chatCanDeleteForAll || m.isOutgoing,
+                outStatus = when {
+                    !m.isOutgoing -> OutStatus.NONE
+                    m.sendingState is TdApi.MessageSendingStateFailed -> OutStatus.FAILED
+                    m.sendingState is TdApi.MessageSendingStatePending -> OutStatus.SENDING
+                    m.id <= lastReadOutbox -> OutStatus.READ
+                    else -> OutStatus.SENT
+                },
             )
         }
     }

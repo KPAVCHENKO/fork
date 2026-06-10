@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Локальные уведомления о новых сообщениях -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Запись голосовых сообщений -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Постоянное соединение для мгновенных сообщений -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />

@@ -25,4 +25,23 @@ object MediaSend {
         BitmapFactory.decodeFile(path, opts)
         return opts.outWidth.coerceAtLeast(0) to opts.outHeight.coerceAtLeast(0)
     }
+
+    data class VideoInfo(val width: Int, val height: Int, val durationSeconds: Int)
+
+    /** Ширина/высота/длительность видео через MediaMetadataRetriever. */
+    fun videoInfo(path: String): VideoInfo = runCatching {
+        android.media.MediaMetadataRetriever().use { mmr ->
+            mmr.setDataSource(path)
+            fun meta(key: Int) = mmr.extractMetadata(key)?.toIntOrNull() ?: 0
+            val rotation = meta(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+            var w = meta(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+            var h = meta(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+            if (rotation == 90 || rotation == 270) { val t = w; w = h; h = t }
+            val durationMs = meta(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+            VideoInfo(w, h, (durationMs / 1000).coerceAtLeast(1))
+        }
+    }.getOrDefault(VideoInfo(0, 0, 0))
+
+    fun isVideo(context: Context, uri: Uri): Boolean =
+        context.contentResolver.getType(uri)?.startsWith("video/") == true
 }
