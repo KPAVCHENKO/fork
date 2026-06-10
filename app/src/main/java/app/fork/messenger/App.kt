@@ -10,7 +10,8 @@ class App : Application() {
         SettingsStore.init(this)
         NotificationsCenter.init(this)
         TdClient.start(this)
-        // Тихо проверяем обновления на GitHub при старте (не через прокси).
+        // Тихо проверяем обновления и актуальный адрес прокси на GitHub (не через прокси).
         UpdateManager.checkSilently(this)
+        app.fork.messenger.net.ProxyConfig.fetchAndApply(this)
     }
 }

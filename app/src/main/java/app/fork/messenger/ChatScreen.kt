@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -87,9 +89,9 @@ import org.drinkless.tdlib.TdApi
 /** Экран переписки. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen(chatId: Long, onBack: () -> Unit) {
+fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     val messages by MessageStore.messages.collectAsStateWithLifecycle()
-    val title by MessageStore.title.collectAsStateWithLifecycle()
+    val header by MessageStore.header.collectAsStateWithLifecycle()
     val loading by MessageStore.loadingHistory.collectAsStateWithLifecycle()
 
     DisposableEffect(chatId) {
@@ -129,13 +131,46 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit) {
                         Icon(app.fork.messenger.ui.ForkIcons.ArrowBack, contentDescription = "назад")
                     }
                 },
-                title = { Text(title, fontWeight = FontWeight.SemiBold) },
+                title = {
+                    val h = header
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { onOpenInfo(chatId) },
+                    ) {
+                        HeaderAvatar(h)
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                h?.title ?: "",
+                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (h != null && h.subtitle.isNotBlank()) {
+                                Text(
+                                    h.subtitle,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (h.subtitle == "онлайн") MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                 ),
             )
         },
-        bottomBar = { MessageInput() },
+        bottomBar = {
+            if (header?.canWrite != false) {
+                MessageInput()
+            } else {
+                ReadOnlyBar()
+            }
+        },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
             LazyColumn(
@@ -245,6 +280,55 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
                     showText = content is TdApi.MessageText || caption != null,
                 )
             }
+        }
+    }
+}
+
+/** Мини-аватар в шапке чата. */
+@Composable
+private fun HeaderAvatar(h: ChatHeader?) {
+    if (h == null) return
+    if (h.avatarPath != null) {
+        coil.compose.AsyncImage(
+            model = java.io.File(h.avatarPath),
+            contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier.size(38.dp).clip(androidx.compose.foundation.shape.CircleShape),
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(app.fork.messenger.ui.avatarBrush(h.colorSeed)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                h.initials,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+        }
+    }
+}
+
+/** Плашка вместо ввода там, где писать нельзя (каналы, ограниченные группы). */
+@Composable
+private fun ReadOnlyBar() {
+    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .padding(vertical = 14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "Только чтение",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -368,25 +452,39 @@ private fun MessageInput() {
     var text by rememberSaveable { mutableStateOf("") }
     val context = LocalContext.current
 
-    // Выбор фото/видео из галереи (системный пикер, без доступа ко всей галерее).
+    // Выбор фото/видео из галереи: сначала показываем предпросмотр с подписью.
+    var pendingMedia by remember { mutableStateOf<PendingMedia?>(null) }
     val pickMedia = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         if (uri != null) {
-            if (MediaSend.isVideo(context, uri)) {
-                val file = MediaSend.copyToCache(context, uri, "mp4")
-                if (file != null) {
+            pendingMedia = if (MediaSend.isVideo(context, uri)) {
+                MediaSend.copyToCache(context, uri, "mp4")?.let { file ->
                     val info = MediaSend.videoInfo(file.absolutePath)
-                    MessageStore.sendVideo(file.absolutePath, info.width, info.height, info.durationSeconds)
+                    PendingMedia(file.absolutePath, true, info.width, info.height, info.durationSeconds)
                 }
             } else {
-                val file = MediaSend.copyToCache(context, uri, "jpg")
-                if (file != null) {
+                MediaSend.copyToCache(context, uri, "jpg")?.let { file ->
                     val (w, h) = MediaSend.imageSize(file.absolutePath)
-                    MessageStore.sendPhoto(file.absolutePath, w, h)
+                    PendingMedia(file.absolutePath, false, w, h, 0)
                 }
             }
         }
+    }
+
+    pendingMedia?.let { media ->
+        MediaPreviewDialog(
+            media = media,
+            onCancel = { pendingMedia = null },
+            onSend = { caption ->
+                if (media.isVideo) {
+                    MessageStore.sendVideo(media.path, media.width, media.height, media.duration, caption)
+                } else {
+                    MessageStore.sendPhoto(media.path, media.width, media.height, caption)
+                }
+                pendingMedia = null
+            },
+        )
     }
 
     val reply by MessageStore.reply.collectAsStateWithLifecycle()
@@ -514,6 +612,95 @@ private fun VoiceButton(context: android.content.Context) {
             contentDescription = "записать голосовое",
             tint = MaterialTheme.colorScheme.onPrimary,
         )
+    }
+}
+
+/** Выбранное из галереи медиа, ждёт подтверждения отправки. */
+data class PendingMedia(val path: String, val isVideo: Boolean, val width: Int, val height: Int, val duration: Int)
+
+/** Полноэкранный предпросмотр перед отправкой: медиа + подпись + Отправить. */
+@Composable
+private fun MediaPreviewDialog(media: PendingMedia, onCancel: () -> Unit, onSend: (String) -> Unit) {
+    var caption by rememberSaveable { mutableStateOf("") }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onCancel,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            // Само медиа по центру
+            if (media.isVideo) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        app.fork.messenger.ui.ForkIcons.Play,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(64.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Видео · ${app.fork.messenger.media.formatDuration(media.duration)}",
+                        color = Color.White,
+                    )
+                }
+            } else {
+                coil.compose.AsyncImage(
+                    model = java.io.File(media.path),
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize().padding(bottom = 88.dp),
+                )
+            }
+
+            IconButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .windowInsetsPadding(WindowInsets.systemBars)
+                    .padding(4.dp),
+            ) {
+                Icon(app.fork.messenger.ui.ForkIcons.Close, contentDescription = "отмена", tint = Color.White)
+            }
+
+            // Подпись + отправить
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                    .padding(8.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                TextField(
+                    value = caption,
+                    onValueChange = { caption = it },
+                    placeholder = { Text("Добавить подпись…") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
+                    maxLines = 3,
+                )
+                Spacer(Modifier.width(6.dp))
+                FilledIconButton(
+                    onClick = { onSend(caption) },
+                    modifier = Modifier.size(48.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                    ),
+                ) {
+                    Icon(
+                        app.fork.messenger.ui.ForkIcons.Send,
+                        contentDescription = "отправить",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                    )
+                }
+            }
+        }
     }
 }
 

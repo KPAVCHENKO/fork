@@ -126,6 +126,7 @@ object ChatStore {
         }
         _chatList.value = snapshot
         _revision.value++
+        MessageStore.rebuildHeader()
     }
 
     private fun toUi(chat: TdApi.Chat): UiChat {

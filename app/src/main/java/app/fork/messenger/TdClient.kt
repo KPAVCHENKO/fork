@@ -223,10 +223,16 @@ object TdClient {
      * Приводит список прокси TDLib к одному нужному: MTProto-прокси из конфига,
      * включён. Уже сохранённый и включённый не трогаем (список хранится в БД TDLib).
      */
+    /** Пере-применить прокси (например, после обновления конфига с GitHub). */
+    fun reapplyProxy() {
+        if (::appContext.isInitialized) ensureProxy()
+    }
+
     private fun ensureProxy() {
-        val host = BuildConfig.PROXY_HOST
-        val port = BuildConfig.PROXY_PORT
-        val secret = BuildConfig.PROXY_SECRET
+        val endpoint = app.fork.messenger.net.ProxyConfig.current(appContext)
+        val host = endpoint.host
+        val port = endpoint.port
+        val secret = endpoint.secret
         if (host.isBlank() || port == 0 || secret.isBlank()) {
             Log.w(TAG, "proxy is not configured, skipping (direct connection)")
             return

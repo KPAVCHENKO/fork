@@ -28,6 +28,17 @@ enum class OutStatus { NONE, SENDING, FAILED, SENT, READ }
 /** Черновик ответа: на какое сообщение отвечаем и как его показать в превью. */
 data class ReplyDraft(val messageId: Long, val preview: String, val sender: String?)
 
+/** Шапка открытого чата. */
+data class ChatHeader(
+    val title: String,
+    val subtitle: String,
+    val avatarPath: String?,
+    val initials: String,
+    val colorSeed: Long,
+    val canWrite: Boolean,
+    val userId: Long, // для приватных чатов, иначе 0
+)
+
 /**
  * Состояние открытого чата: история (по возрастанию id), отправка, realtime-апдейты.
  */
@@ -45,6 +56,9 @@ object MessageStore {
 
     private val _title = MutableStateFlow("")
     val title: StateFlow<String> = _title.asStateFlow()
+
+    private val _header = MutableStateFlow<ChatHeader?>(null)
+    val header: StateFlow<ChatHeader?> = _header.asStateFlow()
 
     private val _loadingHistory = MutableStateFlow(false)
     val loadingHistory: StateFlow<Boolean> = _loadingHistory.asStateFlow()
@@ -71,12 +85,49 @@ object MessageStore {
         chatCanDeleteForAll = chat?.canBeDeletedForAllUsers == true
         lastReadOutbox = chat?.lastReadOutboxMessageId ?: 0L
 
+        rebuildHeader()
+        UserCache.onStatusChanged = { userId ->
+            if (_header.value?.userId == userId) rebuildHeader()
+        }
+
         app.fork.messenger.notify.NotificationsCenter.clearForChat(id)
         TdClient.send(TdApi.OpenChat(id))
         loadMore()
     }
 
     fun isViewing(id: Long): Boolean = synchronized(lock) { chatId == id }
+
+    /** Пересобирает шапку чата (заголовок, статус, аватар, право писать). */
+    fun rebuildHeader() {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        val chat = ChatStore.chat(id) ?: return
+        val type = chat.type
+
+        val userId = (type as? TdApi.ChatTypePrivate)?.userId ?: 0L
+        val isChannel = type is TdApi.ChatTypeSupergroup && type.isChannel
+
+        val subtitle = when {
+            userId != 0L -> UserCache.statusText(userId)
+            isChannel -> "канал"
+            else -> "группа"
+        }
+        val canWrite = when {
+            isChannel -> false // постинг в каналы доделаем для админов позже
+            type is TdApi.ChatTypeBasicGroup || type is TdApi.ChatTypeSupergroup ->
+                chat.permissions?.canSendBasicMessages != false
+            else -> true
+        }
+        _header.value = ChatHeader(
+            title = chat.title.ifBlank { "Без названия" },
+            subtitle = subtitle,
+            avatarPath = chat.photo?.small?.local?.takeIf { it.isDownloadingCompleted }?.path,
+            initials = MessageFormat.initials(chat.title),
+            colorSeed = chat.id,
+            canWrite = canWrite,
+            userId = userId,
+        )
+    }
 
     fun close() {
         val id = synchronized(lock) { chatId.also { chatId = 0 } }

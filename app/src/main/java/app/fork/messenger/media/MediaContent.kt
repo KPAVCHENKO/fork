@@ -318,16 +318,57 @@ fun DocumentContent(document: TdApi.Document) {
 
 @Composable
 fun StickerContent(sticker: TdApi.Sticker) {
-    // Статические стикеры (WEBP) показываем как картинку. Анимированные (TGS/WEBM)
-    // пока отображаем как превью; полноценная анимация — отдельный этап.
-    val file = if (sticker.format is TdApi.StickerFormatWebp) sticker.sticker else (sticker.thumbnail?.file ?: sticker.sticker)
-    val state = rememberFileState(file, autoDownload = true, priority = 26)
+    when (sticker.format) {
+        // Анимированные TGS = gzip-сжатый Lottie JSON, рендерим через lottie-compose.
+        is TdApi.StickerFormatTgs -> TgsSticker(sticker)
+        else -> {
+            // WEBP — картинка; WEBM (видео-стикеры) — пока статичное превью.
+            val file = if (sticker.format is TdApi.StickerFormatWebp) sticker.sticker
+            else (sticker.thumbnail?.file ?: sticker.sticker)
+            val state = rememberFileState(file, autoDownload = true, priority = 26)
+            Box(Modifier.size(128.dp), contentAlignment = Alignment.Center) {
+                val path = state.path
+                if (path != null) {
+                    AsyncImage(model = File(path), contentDescription = sticker.emoji, modifier = Modifier.matchParentSize())
+                } else {
+                    Text(sticker.emoji, style = MaterialTheme.typography.displaySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TgsSticker(sticker: TdApi.Sticker) {
+    val state = rememberFileState(sticker.sticker, autoDownload = true, priority = 26)
+    val path = state.path
+
     Box(Modifier.size(128.dp), contentAlignment = Alignment.Center) {
-        val path = state.path
-        if (path != null) {
-            AsyncImage(model = File(path), contentDescription = sticker.emoji, modifier = Modifier.matchParentSize())
-        } else {
+        if (path == null) {
             Text(sticker.emoji, style = MaterialTheme.typography.displaySmall)
+            return@Box
+        }
+        // Распаковываем gzip в фоне.
+        val json by androidx.compose.runtime.produceState<String?>(null, path) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    java.util.zip.GZIPInputStream(File(path).inputStream())
+                        .bufferedReader().use { it.readText() }
+                }.getOrNull()
+            }
+        }
+        val data = json
+        if (data == null) {
+            Text(sticker.emoji, style = MaterialTheme.typography.displaySmall)
+        } else {
+            val composition by com.airbnb.lottie.compose.rememberLottieComposition(
+                com.airbnb.lottie.compose.LottieCompositionSpec.JsonString(data),
+            )
+            com.airbnb.lottie.compose.LottieAnimation(
+                composition = composition,
+                iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever,
+                modifier = Modifier.matchParentSize(),
+            )
         }
     }
 }

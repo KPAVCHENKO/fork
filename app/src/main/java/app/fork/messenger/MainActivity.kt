@@ -77,10 +77,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Простая навигация: список чатов <-> открытый чат <-> настройки. */
+/** Простая навигация: список чатов <-> открытый чат <-> профиль <-> настройки. */
 @Composable
 private fun MainNavigation() {
     var openChatId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var infoChatId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
 
     // Открытие чата по тапу на уведомление.
@@ -88,15 +89,22 @@ private fun MainNavigation() {
     LaunchedEffect(pending) {
         pending?.let {
             openChatId = it
+            infoChatId = null
             showSettings = false
             Navigator.consume()
         }
     }
 
     val chatId = openChatId
+    val info = infoChatId
     when {
         showSettings -> SettingsScreen(onBack = { showSettings = false })
-        chatId != null -> ChatScreen(chatId = chatId, onBack = { openChatId = null })
+        info != null -> ChatInfoScreen(chatId = info, onBack = { infoChatId = null })
+        chatId != null -> ChatScreen(
+            chatId = chatId,
+            onBack = { openChatId = null },
+            onOpenInfo = { infoChatId = it },
+        )
         else -> ChatListScreen(
             onChatClick = { openChatId = it },
             onSettings = { showSettings = true },

@@ -20,3 +20,6 @@ third_party/
 # Signing keys - NEVER commit
 *.keystore
 *.jks
+
+# Динамический конфиг прокси: публиковать только осознанно (содержит секрет прокси)
+proxy.json
