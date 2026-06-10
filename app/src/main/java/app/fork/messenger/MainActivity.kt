@@ -16,6 +16,16 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.fork.messenger.ui.ForkTheme
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        TdClient.setOnline(true)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        TdClient.setOnline(false)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)

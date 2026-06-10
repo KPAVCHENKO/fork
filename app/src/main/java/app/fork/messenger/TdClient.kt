@@ -122,6 +122,7 @@ object TdClient {
 
     private fun onUpdate(obj: TdApi.Object) {
         UserCache.handleUpdate(obj)
+        app.fork.messenger.media.FileHub.handleUpdate(obj)
         ChatStore.handleUpdate(obj)
         MessageStore.handleUpdate(obj)
 
@@ -203,6 +204,18 @@ object TdClient {
                 _lastError.value = "Параметры TDLib: ${humanReadableError(result)}"
             }
         }
+
+        // Подсказываем TDLib тип сети — он подстраивает таймауты и стратегию докачки.
+        client?.send(TdApi.SetNetworkType(TdApi.NetworkTypeOther()), null)
+    }
+
+    /**
+     * Держим клиента «онлайн», пока приложение открыто: Telegram быстрее
+     * доставляет новые сообщения активной сессии. Вызывается из App при
+     * переходе приложения на передний/задний план.
+     */
+    fun setOnline(online: Boolean) {
+        client?.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(online)), null)
     }
 
     /**

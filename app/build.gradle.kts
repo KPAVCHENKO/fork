@@ -91,4 +91,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
 }

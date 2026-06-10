@@ -9,6 +9,7 @@ import org.drinkless.tdlib.TdApi
 data class UiMessage(
     val id: Long,
     val text: String,
+    val content: TdApi.MessageContent?,
     val time: String,
     val isMine: Boolean,
     val senderName: String?,
@@ -104,6 +105,65 @@ object MessageStore {
         // Сообщение появится через updateNewMessage со статусом отправки.
     }
 
+    fun sendPhoto(path: String, width: Int, height: Int, caption: String = "") {
+        send(
+            TdApi.InputMessagePhoto(
+                TdApi.InputFileLocal(path),
+                null,
+                null,
+                IntArray(0),
+                width,
+                height,
+                if (caption.isBlank()) null else TdApi.FormattedText(caption, null),
+                false,
+                null,
+                false,
+            )
+        )
+    }
+
+    fun sendVideo(path: String, width: Int, height: Int, duration: Int, caption: String = "") {
+        send(
+            TdApi.InputMessageVideo(
+                TdApi.InputFileLocal(path),
+                null,
+                null,
+                0,
+                IntArray(0),
+                duration,
+                width,
+                height,
+                true,
+                if (caption.isBlank()) null else TdApi.FormattedText(caption, null),
+                false,
+                null,
+                false,
+            )
+        )
+    }
+
+    fun sendVoice(path: String, durationSeconds: Int, waveform: ByteArray) {
+        send(
+            TdApi.InputMessageVoiceNote(
+                TdApi.InputFileLocal(path),
+                durationSeconds,
+                waveform,
+                null,
+                null,
+            )
+        )
+    }
+
+    private fun send(content: TdApi.InputMessageContent) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        val message = TdApi.SendMessage().apply {
+            chatId = id
+            inputMessageContent = content
+        }
+        TdClient.send(message)
+    }
+
     fun handleUpdate(obj: TdApi.Object) {
         when (obj) {
             is TdApi.UpdateNewMessage -> ifCurrent(obj.message.chatId) {
@@ -162,6 +222,7 @@ object MessageStore {
             UiMessage(
                 id = m.id,
                 text = MessageFormat.contentText(m.content),
+                content = m.content,
                 time = MessageFormat.bubbleTime(m.date),
                 isMine = m.isOutgoing,
                 senderName = if (isGroup && !m.isOutgoing && senderId != 0L) {

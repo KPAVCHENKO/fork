@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Кэш TDLib (файлы чатов) и кэш приложения — для открытия документов внешними приложениями -->
+    <files-path name="tdlib" path="tdlib/" />
+    <cache-path name="cache" path="." />
+</paths>

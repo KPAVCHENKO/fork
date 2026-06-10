@@ -44,6 +44,35 @@ object ForkIcons {
         icon("Download", "M19 9h-4V3H9v6H5l7 7 7,-7zM5 18v2h14v-2H5z")
     }
 
+    val Play: ImageVector by lazy {
+        icon("Play", "M8 5v14l11,-7z")
+    }
+
+    val Pause: ImageVector by lazy {
+        icon("Pause", "M6 19h4V5H6v14zm8,-14v14h4V5h-4z")
+    }
+
+    val Attach: ImageVector by lazy {
+        icon(
+            "Attach",
+            "M16.5 6v11.5c0 2.21,-1.79 4,-4 4s-4,-1.79 -4,-4V5c0,-1.38 1.12,-2.5 2.5,-2.5s2.5 1.12 2.5 2.5v10.5c0 0.55,-0.45 1,-1 1s-1,-0.45 -1,-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5,-1.12 2.5,-2.5V5c0,-2.21 -1.79,-4 -4,-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5,-2.46 5.5,-5.5V6h-1.5z",
+        )
+    }
+
+    val Mic: ImageVector by lazy {
+        icon(
+            "Mic",
+            "M12 14c1.66 0 3,-1.34 3,-3V5c0,-1.66 -1.34,-3 -3,-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5,-3c0 2.76,-2.24 5,-5 5s-5,-2.24 -5,-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39,-0.49 6,-3.39 6,-6.92h-2z",
+        )
+    }
+
+    val Search: ImageVector by lazy {
+        icon(
+            "Search",
+            "M15.5 14h-0.79l-0.28,-0.27c0.98,-1.14 1.57,-2.62 1.57,-4.23 0,-3.59 -2.91,-6.5 -6.5,-6.5S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09,-0.59 4.23,-1.57l0.27 0.28v0.79l5 4.99L20.49 19l-4.99,-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
+        )
+    }
+
     private fun icon(name: String, pathData: String): ImageVector =
         ImageVector.Builder(
             name = name,
