@@ -16,7 +16,13 @@ data class UiMessage(
     val senderSeed: Long,
     val showSender: Boolean,
     val isFirstOfGroup: Boolean,
+    val replyText: String?,
+    val canDelete: Boolean,
+    val canDeleteForAll: Boolean,
 )
+
+/** Черновик ответа: на какое сообщение отвечаем и как его показать в превью. */
+data class ReplyDraft(val messageId: Long, val preview: String, val sender: String?)
 
 /**
  * Состояние открытого чата: история (по возрастанию id), отправка, realtime-апдейты.
@@ -25,6 +31,8 @@ object MessageStore {
     private val lock = Any()
     private var chatId: Long = 0
     private var isGroup = false
+    private var chatCanDeleteForSelf = false
+    private var chatCanDeleteForAll = false
     private val msgs = ArrayList<TdApi.Message>() // отсортированы по возрастанию id
 
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
@@ -35,6 +43,9 @@ object MessageStore {
 
     private val _loadingHistory = MutableStateFlow(false)
     val loadingHistory: StateFlow<Boolean> = _loadingHistory.asStateFlow()
+
+    private val _reply = MutableStateFlow<ReplyDraft?>(null)
+    val reply: StateFlow<ReplyDraft?> = _reply.asStateFlow()
 
     private var historyEnded = false
 
@@ -51,6 +62,8 @@ object MessageStore {
         val type = chat?.type
         isGroup = type is TdApi.ChatTypeBasicGroup ||
             (type is TdApi.ChatTypeSupergroup && !type.isChannel)
+        chatCanDeleteForSelf = chat?.canBeDeletedOnlyForSelf == true
+        chatCanDeleteForAll = chat?.canBeDeletedForAllUsers == true
 
         TdClient.send(TdApi.OpenChat(id))
         loadMore()
@@ -157,11 +170,39 @@ object MessageStore {
     private fun send(content: TdApi.InputMessageContent) {
         val id = synchronized(lock) { chatId }
         if (id == 0L) return
+        val replyTo = _reply.value?.let {
+            TdApi.InputMessageReplyToMessage(it.messageId, null, 0, null)
+        }
         val message = TdApi.SendMessage().apply {
             chatId = id
+            this.replyTo = replyTo
             inputMessageContent = content
         }
         TdClient.send(message)
+        _reply.value = null
+    }
+
+    // ---------- Ответы и удаление ----------
+
+    fun startReply(messageId: Long) {
+        val m = synchronized(lock) { msgs.firstOrNull { it.id == messageId } } ?: return
+        val senderId = (m.senderId as? TdApi.MessageSenderUser)?.userId ?: 0L
+        val sender = when {
+            m.isOutgoing -> "Вы"
+            senderId != 0L -> UserCache.firstName(senderId)
+            else -> null
+        }
+        _reply.value = ReplyDraft(messageId, MessageFormat.contentText(m.content), sender)
+    }
+
+    fun clearReply() {
+        _reply.value = null
+    }
+
+    fun deleteMessage(messageId: Long, forEveryone: Boolean) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        TdClient.send(TdApi.DeleteMessages(id, longArrayOf(messageId), forEveryone))
     }
 
     fun handleUpdate(obj: TdApi.Object) {
@@ -219,6 +260,7 @@ object MessageStore {
             val prev = snapshot.getOrNull(i - 1)
             val prevSenderId = (prev?.senderId as? TdApi.MessageSenderUser)?.userId ?: -1L
             val firstOfGroup = prev == null || prevSenderId != senderId || prev.isOutgoing != m.isOutgoing
+            val replyTo = m.replyTo as? TdApi.MessageReplyToMessage
             UiMessage(
                 id = m.id,
                 text = MessageFormat.contentText(m.content),
@@ -231,6 +273,10 @@ object MessageStore {
                 senderSeed = senderId,
                 showSender = isGroup && !m.isOutgoing && firstOfGroup,
                 isFirstOfGroup = firstOfGroup,
+                replyText = replyTo?.content?.let { MessageFormat.contentText(it) }
+                    ?: if (replyTo != null) "Сообщение" else null,
+                canDelete = chatCanDeleteForSelf || chatCanDeleteForAll || m.isOutgoing,
+                canDeleteForAll = chatCanDeleteForAll || m.isOutgoing,
             )
         }
     }
