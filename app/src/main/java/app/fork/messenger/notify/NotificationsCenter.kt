@@ -48,6 +48,7 @@ object NotificationsCenter {
 
     private fun onNewMessage(message: TdApi.Message) {
         val context = appContext ?: return
+        if (!app.fork.messenger.SettingsStore.notificationsEnabled.value) return
         if (message.isOutgoing) return
         // Не шумим про чат, который сейчас открыт.
         if (MessageStore.isViewing(message.chatId)) return

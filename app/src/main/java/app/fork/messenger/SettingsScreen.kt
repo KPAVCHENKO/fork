@@ -1,5 +1,6 @@
 package app.fork.messenger
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -19,6 +22,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -30,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.fork.messenger.SettingsStore
 import app.fork.messenger.update.UpdateState
 import app.fork.messenger.update.UpdateManager
 
@@ -60,6 +68,7 @@ fun SettingsScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) {
             Text(myName ?: "Аккаунт", style = MaterialTheme.typography.titleLarge)
@@ -70,12 +79,106 @@ fun SettingsScreen(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.outline,
             )
 
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(28.dp))
+            Text("Оформление", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            AppearanceSection()
+
+            Spacer(Modifier.height(28.dp))
+            Text("Уведомления и поведение", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            BehaviorSection(context)
+
+            Spacer(Modifier.height(28.dp))
             Text("Обновления", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
-
             UpdateSection(updateState, context)
+
+            Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+@Composable
+private fun AppearanceSection() {
+    val theme by SettingsStore.theme.collectAsStateWithLifecycle()
+    val dynamic by SettingsStore.dynamicColors.collectAsStateWithLifecycle()
+
+    Text("Тема", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Spacer(Modifier.height(8.dp))
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        val modes = listOf(
+            SettingsStore.ThemeMode.SYSTEM to "Системная",
+            SettingsStore.ThemeMode.LIGHT to "Светлая",
+            SettingsStore.ThemeMode.DARK to "Тёмная",
+        )
+        modes.forEachIndexed { index, (mode, label) ->
+            SegmentedButton(
+                selected = theme == mode,
+                onClick = { SettingsStore.setTheme(mode) },
+                shape = SegmentedButtonDefaults.itemShape(index, modes.size),
+            ) { Text(label) }
+        }
+    }
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        Spacer(Modifier.height(8.dp))
+        ToggleRow(
+            title = "Цвета системы (Material You)",
+            subtitle = "Подстраивать палитру под обои телефона",
+            checked = dynamic,
+            onCheckedChange = { SettingsStore.setDynamicColors(it) },
+        )
+    }
+}
+
+@Composable
+private fun BehaviorSection(context: android.content.Context) {
+    val notifications by SettingsStore.notificationsEnabled.collectAsStateWithLifecycle()
+    val enterToSend by SettingsStore.enterToSend.collectAsStateWithLifecycle()
+
+    ToggleRow(
+        title = "Уведомления о сообщениях",
+        subtitle = "Показывать всплывающие уведомления",
+        checked = notifications,
+        onCheckedChange = { SettingsStore.setNotificationsEnabled(it) },
+    )
+    Spacer(Modifier.height(4.dp))
+    ToggleRow(
+        title = "Enter отправляет сообщение",
+        subtitle = "Иначе Enter — перенос строки",
+        checked = enterToSend,
+        onCheckedChange = { SettingsStore.setEnterToSend(it) },
+    )
+    Spacer(Modifier.height(12.dp))
+    OutlinedButton(
+        onClick = {
+            runCatching {
+                context.startActivity(
+                    android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                )
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text("Отключить экономию батареи для Fork")
+    }
+    Text(
+        "Чтобы сообщения приходили мгновенно даже в фоне",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
+@Composable
+private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

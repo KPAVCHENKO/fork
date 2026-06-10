@@ -8,9 +8,12 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.fork.messenger.SettingsStore
 
 // Фирменные цвета Fork — индиго и циан, как на иконке
 private val BrandPrimary = Color(0xFF2362FD)
@@ -42,11 +45,20 @@ private val DarkScheme = darkColorScheme(
  */
 @Composable
 fun ForkTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+    val themeMode by SettingsStore.theme.collectAsStateWithLifecycle()
+    val dynamicColors by SettingsStore.dynamicColors.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    val dark = when (themeMode) {
+        SettingsStore.ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        SettingsStore.ThemeMode.LIGHT -> false
+        SettingsStore.ThemeMode.DARK -> true
+    }
+
+    val canDynamic = dynamicColors && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val scheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && dark -> dynamicDarkColorScheme(context)
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> dynamicLightColorScheme(context)
+        canDynamic && dark -> dynamicDarkColorScheme(context)
+        canDynamic -> dynamicLightColorScheme(context)
         dark -> DarkScheme
         else -> LightScheme
     }

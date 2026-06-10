@@ -26,6 +26,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 
 
 
@@ -58,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -70,6 +73,7 @@ import app.fork.messenger.media.PhotoContent
 import app.fork.messenger.media.StickerContent
 import app.fork.messenger.media.VideoContent
 import app.fork.messenger.media.VoiceContent
+import app.fork.messenger.SettingsStore
 import app.fork.messenger.ui.senderColor
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.drinkless.tdlib.TdApi
@@ -312,6 +316,14 @@ private fun MessageInput() {
     }
 
     val reply by MessageStore.reply.collectAsStateWithLifecycle()
+    val enterToSend by SettingsStore.enterToSend.collectAsStateWithLifecycle()
+
+    fun submit() {
+        if (text.isNotBlank()) {
+            MessageStore.sendText(text)
+            text = ""
+        }
+    }
 
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
         Column(
@@ -355,14 +367,15 @@ private fun MessageInput() {
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
                 ),
+                keyboardOptions = KeyboardOptions(
+                    imeAction = if (enterToSend) ImeAction.Send else ImeAction.Default,
+                ),
+                keyboardActions = KeyboardActions(onSend = { submit() }),
                 maxLines = 5,
             )
             Spacer(Modifier.padding(start = 6.dp))
             FilledIconButton(
-                onClick = {
-                    MessageStore.sendText(text)
-                    text = ""
-                },
+                onClick = { submit() },
                 enabled = text.isNotBlank(),
                 modifier = Modifier.size(48.dp),
                 colors = IconButtonDefaults.filledIconButtonColors(
