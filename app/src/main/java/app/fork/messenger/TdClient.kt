@@ -100,6 +100,12 @@ object TdClient {
         _lastError.value = null
     }
 
+    /** Общий канал запросов к TDLib для остальных модулей (ChatStore, MessageStore…). */
+    fun send(query: TdApi.Function<*>, onResult: ((TdApi.Object) -> Unit)? = null) {
+        val handler = onResult?.let { cb -> Client.ResultHandler { obj -> cb(obj) } }
+        client?.send(query, handler)
+    }
+
     private fun sendAuthRequest(query: TdApi.Function<TdApi.Ok>) {
         _lastError.value = null
         _busy.value = true
@@ -115,6 +121,10 @@ object TdClient {
     // ---------- Обработка апдейтов TDLib ----------
 
     private fun onUpdate(obj: TdApi.Object) {
+        UserCache.handleUpdate(obj)
+        ChatStore.handleUpdate(obj)
+        MessageStore.handleUpdate(obj)
+
         when (obj) {
             is TdApi.UpdateAuthorizationState -> onAuthorizationState(obj.authorizationState)
 
@@ -157,6 +167,7 @@ object TdClient {
 
             is TdApi.AuthorizationStateReady -> {
                 _authState.value = AuthUiState.Ready
+                ChatStore.loadChats()
                 client?.send(TdApi.GetMe()) { result ->
                     if (result is TdApi.User) {
                         _myName.value = listOf(result.firstName, result.lastName)
