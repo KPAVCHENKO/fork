@@ -125,6 +125,7 @@ object TdClient {
         app.fork.messenger.media.FileHub.handleUpdate(obj)
         ChatStore.handleUpdate(obj)
         MessageStore.handleUpdate(obj)
+        app.fork.messenger.notify.NotificationsCenter.handleUpdate(obj)
 
         when (obj) {
             is TdApi.UpdateAuthorizationState -> onAuthorizationState(obj.authorizationState)

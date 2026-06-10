@@ -65,9 +65,12 @@ object MessageStore {
         chatCanDeleteForSelf = chat?.canBeDeletedOnlyForSelf == true
         chatCanDeleteForAll = chat?.canBeDeletedForAllUsers == true
 
+        app.fork.messenger.notify.NotificationsCenter.clearForChat(id)
         TdClient.send(TdApi.OpenChat(id))
         loadMore()
     }
+
+    fun isViewing(id: Long): Boolean = synchronized(lock) { chatId == id }
 
     fun close() {
         val id = synchronized(lock) { chatId.also { chatId = 0 } }
