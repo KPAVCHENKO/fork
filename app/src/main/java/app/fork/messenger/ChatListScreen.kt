@@ -22,8 +22,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -44,10 +46,11 @@ import java.io.File
 /** Главный экран — список чатов. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatListScreen(onChatClick: (Long) -> Unit) {
+fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit) {
     val chats by ChatStore.chatList.collectAsStateWithLifecycle()
     val loading by ChatStore.loading.collectAsStateWithLifecycle()
     val connection by TdClient.connectionState.collectAsStateWithLifecycle()
+    val updateState by app.fork.messenger.update.UpdateManager.state.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -58,27 +61,64 @@ fun ChatListScreen(onChatClick: (Long) -> Unit) {
                         fontWeight = FontWeight.Bold,
                     )
                 },
+                actions = {
+                    IconButton(onClick = onSettings) {
+                        Icon(app.fork.messenger.ui.ForkIcons.Settings, contentDescription = "настройки")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                 ),
             )
         },
     ) { padding ->
-        if (chats.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                if (loading) {
-                    CircularProgressIndicator()
-                } else {
-                    Text("Чатов пока нет", color = MaterialTheme.colorScheme.outline)
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            val available = updateState as? app.fork.messenger.update.UpdateState.Available
+            if (available != null) {
+                UpdateBanner(version = available.release.version, onClick = onSettings)
+            }
+
+            if (chats.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (loading) {
+                        CircularProgressIndicator()
+                    } else {
+                        Text("Чатов пока нет", color = MaterialTheme.colorScheme.outline)
+                    }
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(chats, key = { it.id }) { chat ->
+                        ChatRow(chat = chat, onClick = { onChatClick(chat.id) })
+                    }
                 }
             }
-            return@Scaffold
         }
+    }
+}
 
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            items(chats, key = { it.id }) { chat ->
-                ChatRow(chat = chat, onClick = { onChatClick(chat.id) })
-            }
+@Composable
+private fun UpdateBanner(version: String, onClick: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                app.fork.messenger.ui.ForkIcons.Download,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(
+                "Доступно обновление $version — нажмите, чтобы установить",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
         }
     }
 }

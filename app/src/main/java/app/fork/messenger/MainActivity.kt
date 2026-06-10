@@ -34,15 +34,19 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Простая навигация: список чатов <-> открытый чат. */
+/** Простая навигация: список чатов <-> открытый чат <-> настройки. */
 @Composable
 private fun MainNavigation() {
     var openChatId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
 
     val chatId = openChatId
-    if (chatId == null) {
-        ChatListScreen(onChatClick = { openChatId = it })
-    } else {
-        ChatScreen(chatId = chatId, onBack = { openChatId = null })
+    when {
+        showSettings -> SettingsScreen(onBack = { showSettings = false })
+        chatId != null -> ChatScreen(chatId = chatId, onBack = { openChatId = null })
+        else -> ChatListScreen(
+            onChatClick = { openChatId = it },
+            onSettings = { showSettings = true },
+        )
     }
 }
