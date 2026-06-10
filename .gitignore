@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# Local config with secrets (api_id, api_hash, proxy, keystore passwords)
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/
+
+# Native build intermediates
+.cxx/
+
+# TDLib sources and build artifacts (built separately, see scripts/tdlib-build-env.sh)
+third_party/
+
+# Signing keys - NEVER commit
+*.keystore
+*.jks
