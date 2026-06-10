@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 
 
 
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,15 +29,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,27 +63,57 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit) {
     val connection by TdClient.connectionState.collectAsStateWithLifecycle()
     val updateState by app.fork.messenger.update.UpdateManager.state.collectAsStateWithLifecycle()
 
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(query, searching) {
+        if (searching) SearchStore.search(query) else SearchStore.clear()
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (connection == "подключено") "Fork" else connection.replaceFirstChar { it.uppercase() },
-                        fontWeight = FontWeight.Bold,
-                    )
-                },
-                actions = {
-                    IconButton(onClick = onSettings) {
-                        Icon(app.fork.messenger.ui.ForkIcons.Settings, contentDescription = "настройки")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
+            if (searching) {
+                SearchBar(
+                    query = query,
+                    onQuery = { query = it },
+                    onClose = { searching = false; query = "" },
+                    onSubmit = {
+                        if (query.isNotBlank()) {
+                            SearchStore.resolveAndOpen(query) { id ->
+                                searching = false; query = ""; onChatClick(id)
+                            }
+                        }
+                    },
+                )
+            } else {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = if (connection == "подключено") "Fork" else connection.replaceFirstChar { it.uppercase() },
+                            fontWeight = FontWeight.Bold,
+                        )
+                    },
+                    actions = {
+                        IconButton(onClick = { searching = true }) {
+                            Icon(app.fork.messenger.ui.ForkIcons.Search, contentDescription = "поиск")
+                        }
+                        IconButton(onClick = onSettings) {
+                            Icon(app.fork.messenger.ui.ForkIcons.Settings, contentDescription = "настройки")
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            }
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            if (searching) {
+                SearchResults(onChatClick = { id -> searching = false; query = ""; onChatClick(id) })
+                return@Column
+            }
+
             val available = updateState as? app.fork.messenger.update.UpdateState.Available
             if (available != null) {
                 UpdateBanner(version = available.release.version, onClick = onSettings)
@@ -93,6 +134,69 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchBar(
+    query: String,
+    onQuery: (String) -> Unit,
+    onClose: () -> Unit,
+    onSubmit: () -> Unit,
+) {
+    TopAppBar(
+        navigationIcon = {
+            IconButton(onClick = onClose) {
+                Icon(app.fork.messenger.ui.ForkIcons.ArrowBack, contentDescription = "назад")
+            }
+        },
+        title = {
+            TextField(
+                value = query,
+                onValueChange = onQuery,
+                placeholder = { Text("Поиск чатов, @имя или ссылка") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
+            )
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    )
+}
+
+@Composable
+private fun SearchResults(onChatClick: (Long) -> Unit) {
+    val ids by SearchStore.results.collectAsStateWithLifecycle()
+    val status by SearchStore.status.collectAsStateWithLifecycle()
+    val revision by ChatStore.revision.collectAsStateWithLifecycle()
+
+    val items = remember(ids, revision) { ids.mapNotNull { ChatStore.uiFor(it) } }
+
+    if (status != null) {
+        Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+            Text(status!!, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+    if (items.isEmpty() && status == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Введите запрос для поиска", color = MaterialTheme.colorScheme.outline)
+        }
+        return
+    }
+    LazyColumn(Modifier.fillMaxSize()) {
+        items(items, key = { it.id }) { chat ->
+            ChatRow(chat = chat, onClick = { onChatClick(chat.id) })
         }
     }
 }

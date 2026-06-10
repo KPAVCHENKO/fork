@@ -35,6 +35,10 @@ object ChatStore {
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
+    /** Счётчик изменений — растёт при любом обновлении, чтобы поиск перерисовывал результаты. */
+    private val _revision = MutableStateFlow(0)
+    val revision: StateFlow<Int> = _revision.asStateFlow()
+
     /** Загружает основной список чатов до конца (TDLib отвечает 404, когда чаты закончились). */
     fun loadChats() {
         TdClient.send(TdApi.LoadChats(TdApi.ChatListMain(), 50)) { result ->
@@ -46,6 +50,9 @@ object ChatStore {
     }
 
     fun chat(chatId: Long): TdApi.Chat? = synchronized(lock) { chats[chatId] }
+
+    /** Готовая строка для UI по id чата (например, для результатов поиска). */
+    fun uiFor(chatId: Long): UiChat? = synchronized(lock) { chats[chatId] }?.let { toUi(it) }
 
     /** Пересобрать список (например, когда подтянулись имена пользователей). */
     fun invalidate() = rebuild()
@@ -118,6 +125,7 @@ object ChatStore {
                 .map { toUi(it) }
         }
         _chatList.value = snapshot
+        _revision.value++
     }
 
     private fun toUi(chat: TdApi.Chat): UiChat {
