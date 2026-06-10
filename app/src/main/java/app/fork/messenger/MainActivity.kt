@@ -3,20 +3,19 @@ package app.fork.messenger
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,46 +26,46 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    SmokeTestScreen()
+                    val authState by TdClient.authState.collectAsStateWithLifecycle()
+                    if (authState == AuthUiState.Ready) {
+                        HomeScreen()
+                    } else {
+                        LoginScreen()
+                    }
                 }
             }
         }
     }
 }
 
-/**
- * Экран дымового теста Этапа 0: показывает, что TDLib загрузилась,
- * прислала свою версию и первое состояние авторизации.
- */
+/** Временный экран после входа — настоящий список чатов появится на Этапе 2. */
 @Composable
-fun SmokeTestScreen() {
-    val tdVersion by TdClient.tdVersion.collectAsStateWithLifecycle()
-    val authState by TdClient.authStateName.collectAsStateWithLifecycle()
-    val updateLog by TdClient.updateLog.collectAsStateWithLifecycle()
+fun HomeScreen() {
+    val name by TdClient.myName.collectAsStateWithLifecycle()
+    val connection by TdClient.connectionState.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .safeDrawingPadding()
-            .padding(16.dp),
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        Text("Fork — проверка TDLib", style = MaterialTheme.typography.headlineSmall)
+        Text("Вход выполнен ✅", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(16.dp))
-
-        Text("Версия TDLib: $tdVersion", style = MaterialTheme.typography.bodyLarge)
+        Text(name ?: "…", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
-        Text("Состояние авторизации: $authState", style = MaterialTheme.typography.bodyLarge)
-
-        Spacer(Modifier.height(16.dp))
-        HorizontalDivider()
-        Spacer(Modifier.height(8.dp))
-
-        Text("Полученные апдейты:", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(8.dp))
-        LazyColumn {
-            items(updateLog.reversed()) { name ->
-                Text(name, style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        Text(
+            "Состояние: $connection",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.secondary,
+        )
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "Список чатов появится на следующем этапе",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
     }
 }
