@@ -65,6 +65,7 @@ fun MediaImage(
     height: Int,
     modifier: Modifier = Modifier,
     priority: Int = 24,
+    shape: androidx.compose.ui.graphics.Shape? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val state = rememberFileState(file, autoDownload = true, priority = priority)
@@ -76,8 +77,8 @@ fun MediaImage(
         modifier
             .widthIn(max = 252.dp)
             .aspectRatio(aspect(width, height))
-            // Радиус медиа = радиус пузыря − 3dp (Fork Design Spec §4.3).
-            .clip(RoundedCornerShape(forkTokens.bubbleRadius - 3.dp))
+            // Радиус медиа = радиус пузыря − 3dp; для «голых» медиа — форма пузыря.
+            .clip(shape ?: RoundedCornerShape(forkTokens.bubbleRadius - 3.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
@@ -109,7 +110,7 @@ fun MediaImage(
 }
 
 @Composable
-fun PhotoContent(photo: TdApi.Photo, onOpen: () -> Unit) {
+fun PhotoContent(photo: TdApi.Photo, shape: androidx.compose.ui.graphics.Shape? = null, onOpen: () -> Unit) {
     val size = photo.inlineSize() ?: return
     MediaImage(
         file = size.photo,
@@ -117,12 +118,13 @@ fun PhotoContent(photo: TdApi.Photo, onOpen: () -> Unit) {
         width = size.width,
         height = size.height,
         priority = 28,
+        shape = shape,
         onClick = onOpen,
     )
 }
 
 @Composable
-fun VideoContent(video: TdApi.Video, onOpen: () -> Unit) {
+fun VideoContent(video: TdApi.Video, shape: androidx.compose.ui.graphics.Shape? = null, onOpen: () -> Unit) {
     Box(contentAlignment = Alignment.Center) {
         val thumb = video.thumbnail?.file
         if (thumb != null) {
@@ -132,6 +134,7 @@ fun VideoContent(video: TdApi.Video, onOpen: () -> Unit) {
                 width = video.width,
                 height = video.height,
                 priority = 20,
+                shape = shape,
                 onClick = onOpen,
             )
         }
@@ -161,7 +164,7 @@ fun VideoContent(video: TdApi.Video, onOpen: () -> Unit) {
 }
 
 @Composable
-fun AnimationContent(animation: TdApi.Animation) {
+fun AnimationContent(animation: TdApi.Animation, shape: androidx.compose.ui.graphics.Shape? = null) {
     val context = LocalContext.current
     val state = rememberFileState(animation.animation, autoDownload = false, priority = 16)
     Box(contentAlignment = Alignment.Center) {
@@ -173,6 +176,7 @@ fun AnimationContent(animation: TdApi.Animation) {
                 width = animation.width,
                 height = animation.height,
                 priority = 18,
+                shape = shape,
                 onClick = {
                     state.path?.let { openExternally(context, it, animation.mimeType.ifBlank { "video/mp4" }) }
                         ?: FileHub.ensureDownloaded(animation.animation, 28)

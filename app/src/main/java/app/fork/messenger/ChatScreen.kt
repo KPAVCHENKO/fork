@@ -690,6 +690,37 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
         bottomEnd = if (message.isMine && message.isLastOfGroup) small else big,
     )
     val isText = content is TdApi.MessageText
+    val caption = captionText(content)
+    val isVisualMedia = content is TdApi.MessagePhoto ||
+        content is TdApi.MessageVideo || content is TdApi.MessageAnimation
+
+    // «Голое» медиа без подписи/ответа/имени — чистое фото без пузыря (как в Telegram),
+    // время — капсулой поверх угла снимка.
+    if (isVisualMedia && caption == null && message.replyText == null &&
+        !message.showSender && message.reactions.isEmpty()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = if (message.isFirstOfGroup) 10.dp else 4.dp),
+            horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start,
+        ) {
+            Box {
+                BubbleMedia(content, message.isMine, onOpenMedia, mediaShape = shape)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(Color(0x8C050912))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                    TimeStatus(message.time, message.outStatus, mine = true)
+                }
+            }
+        }
+        return
+    }
 
     Column(
         modifier = Modifier
@@ -714,8 +745,11 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
                 Modifier
                     .widthIn(max = 300.dp)
                     .padding(
-                        if (isText) PaddingValues(horizontal = 13.dp, vertical = 8.dp)
-                        else PaddingValues(4.dp),
+                        when {
+                            isText -> PaddingValues(horizontal = 13.dp, vertical = 8.dp)
+                            isVisualMedia -> PaddingValues(0.dp) // медиа встык к краям пузыря
+                            else -> PaddingValues(4.dp)
+                        },
                     ),
             ) {
                 if (message.showSender && message.senderName != null) {
@@ -724,21 +758,30 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
                         style = MaterialTheme.typography.labelMedium,
                         color = senderColor(message.senderSeed),
                         modifier = Modifier.padding(
-                            horizontal = if (isText) 0.dp else 8.dp,
-                            vertical = 1.dp,
+                            start = if (isText) 0.dp else 10.dp,
+                            end = if (isText) 0.dp else 10.dp,
+                            top = if (isText) 1.dp else 6.dp,
+                            bottom = 1.dp,
                         ),
                     )
                     Spacer(Modifier.height(2.dp))
                 }
 
                 if (message.replyText != null) {
-                    ReplyQuote(message.replyText, mine = message.isMine)
+                    Box(Modifier.padding(if (isText) PaddingValues(0.dp) else PaddingValues(start = 6.dp, end = 6.dp, top = 6.dp))) {
+                        ReplyQuote(message.replyText, mine = message.isMine)
+                    }
                     Spacer(Modifier.height(4.dp))
                 }
 
-                BubbleMedia(content, message.isMine, onOpenMedia)
+                val mediaTop = if (message.showSender || message.replyText != null) 6.dp else big
+                BubbleMedia(
+                    content, message.isMine, onOpenMedia,
+                    mediaShape = if (isVisualMedia) RoundedCornerShape(
+                        topStart = mediaTop, topEnd = mediaTop, bottomStart = 4.dp, bottomEnd = 4.dp,
+                    ) else null,
+                )
 
-                val caption = captionText(content)
                 BubbleText(
                     text = if (caption != null) caption else message.text,
                     time = message.time,
@@ -758,7 +801,14 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
 
                 if (message.reactions.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
-                    ReactionChips(message.id, message.reactions, mine = message.isMine)
+                    Box(
+                        Modifier.padding(
+                            if (isText) PaddingValues(0.dp)
+                            else PaddingValues(start = 8.dp, end = 8.dp, bottom = 6.dp),
+                        ),
+                    ) {
+                        ReactionChips(message.id, message.reactions, mine = message.isMine)
+                    }
                 }
             }
         }
@@ -939,11 +989,12 @@ private fun BubbleMedia(
     content: TdApi.MessageContent?,
     mine: Boolean,
     onOpenMedia: (MediaTarget) -> Unit,
+    mediaShape: androidx.compose.ui.graphics.Shape? = null,
 ) {
     when (content) {
-        is TdApi.MessagePhoto -> PhotoContent(content.photo) { onOpenMedia(MediaTarget.Photo(content.photo)) }
-        is TdApi.MessageVideo -> VideoContent(content.video) { onOpenMedia(MediaTarget.Video(content.video)) }
-        is TdApi.MessageAnimation -> AnimationContent(content.animation)
+        is TdApi.MessagePhoto -> PhotoContent(content.photo, mediaShape) { onOpenMedia(MediaTarget.Photo(content.photo)) }
+        is TdApi.MessageVideo -> VideoContent(content.video, mediaShape) { onOpenMedia(MediaTarget.Video(content.video)) }
+        is TdApi.MessageAnimation -> AnimationContent(content.animation, mediaShape)
         is TdApi.MessageVoiceNote -> VoiceContent(content.voiceNote, mine = mine)
         is TdApi.MessageDocument -> DocumentContent(content.document, mine = mine)
         else -> Unit
@@ -972,8 +1023,8 @@ private fun BubbleText(
     Row(
         verticalAlignment = Alignment.Bottom,
         modifier = Modifier.padding(
-            horizontal = if (hasMediaAbove) 8.dp else 0.dp,
-            vertical = if (hasMediaAbove) 4.dp else 0.dp,
+            horizontal = if (hasMediaAbove) 11.dp else 0.dp,
+            vertical = if (hasMediaAbove) 7.dp else 0.dp,
         ),
     ) {
         Text(
