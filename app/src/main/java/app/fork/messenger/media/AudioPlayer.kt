@@ -28,10 +28,38 @@ object AudioPlayer {
     private val _state = MutableStateFlow<PlaybackState?>(null)
     val state: StateFlow<PlaybackState?> = _state.asStateFlow()
 
+    /** Скорость воспроизведения голосовых: 1 / 1.5 / 2. */
+    private val _speed = MutableStateFlow(1f)
+    val speed: StateFlow<Float> = _speed.asStateFlow()
+
     private var player: ExoPlayer? = null
     private var currentFileId: Int = 0
     private val scope = CoroutineScope(Dispatchers.Main.immediate)
     private var ticker: Job? = null
+
+    /** Циклическое переключение скорости ×1 → ×1.5 → ×2 → ×1. */
+    fun cycleSpeed() {
+        scope.launch {
+            val next = when (_speed.value) {
+                1f -> 1.5f
+                1.5f -> 2f
+                else -> 1f
+            }
+            _speed.value = next
+            player?.setPlaybackSpeed(next)
+        }
+    }
+
+    /** Перемотка играющего файла к доле 0..1 (тап по waveform). */
+    fun seekTo(fileId: Int, fraction: Float) {
+        scope.launch {
+            val p = player ?: return@launch
+            if (currentFileId != fileId) return@launch
+            val dur = p.duration.takeIf { it > 0 } ?: return@launch
+            p.seekTo((dur * fraction.coerceIn(0f, 1f)).toLong())
+            publish(p.isPlaying)
+        }
+    }
 
     /** Нажатие на голосовое: играет, если другое/остановлено; ставит на паузу, если играет это же. */
     fun toggle(context: Context, fileId: Int, path: String) {
@@ -55,6 +83,7 @@ object AudioPlayer {
             p.prepare()
             currentFileId = fileId
         }
+        p.setPlaybackSpeed(_speed.value)
         p.play()
         publish(true)
         startTicker()

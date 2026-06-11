@@ -18,6 +18,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -780,10 +781,36 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
                     mediaShape = if (isVisualMedia) RoundedCornerShape(
                         topStart = mediaTop, topEnd = mediaTop, bottomStart = 4.dp, bottomEnd = 4.dp,
                     ) else null,
+                    messageId = message.id,
                 )
 
+                // Форматирование TDLib (жирный/курсив/код/ссылки/спойлеры).
+                var spoilersRevealed by remember(message.id) { mutableStateOf(false) }
+                val formatted: TdApi.FormattedText? = when (content) {
+                    is TdApi.MessageText -> content.text
+                    is TdApi.MessagePhoto -> content.caption
+                    is TdApi.MessageVideo -> content.caption
+                    is TdApi.MessageAnimation -> content.caption
+                    is TdApi.MessageDocument -> content.caption
+                    else -> null
+                }
+                val linkColor = if (message.isMine) Color.White else tokens.checkCyan
+                val codeBg = if (message.isMine) Color.White.copy(alpha = 0.18f)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+                val spoilerBg = if (message.isMine) Color.White.copy(alpha = 0.55f)
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                val annotated = remember(message.id, message.isEdited, spoilersRevealed, content) {
+                    formatted?.takeIf { it.text.isNotBlank() }?.toAnnotated(
+                        linkColor = linkColor,
+                        codeBackground = codeBg,
+                        spoilerHidden = spoilerBg,
+                        spoilersRevealed = spoilersRevealed,
+                        onRevealSpoilers = { spoilersRevealed = true },
+                    ) ?: androidx.compose.ui.text.AnnotatedString(if (caption != null) caption else message.text)
+                }
+
                 BubbleText(
-                    text = if (caption != null) caption else message.text,
+                    text = annotated,
                     time = message.time,
                     status = message.outStatus,
                     mine = message.isMine,
@@ -990,6 +1017,7 @@ private fun BubbleMedia(
     mine: Boolean,
     onOpenMedia: (MediaTarget) -> Unit,
     mediaShape: androidx.compose.ui.graphics.Shape? = null,
+    messageId: Long = 0L,
 ) {
     when (content) {
         is TdApi.MessagePhoto -> PhotoContent(content.photo, mediaShape) { onOpenMedia(MediaTarget.Photo(content.photo)) }
@@ -997,13 +1025,126 @@ private fun BubbleMedia(
         is TdApi.MessageAnimation -> AnimationContent(content.animation, mediaShape)
         is TdApi.MessageVoiceNote -> VoiceContent(content.voiceNote, mine = mine)
         is TdApi.MessageDocument -> DocumentContent(content.document, mine = mine)
+        is TdApi.MessagePoll -> PollContent(messageId, content.poll, mine)
         else -> Unit
+    }
+}
+
+/** Опрос в пузыре: вопрос, варианты (тап — голос), результаты с прогресс-барами. */
+@Composable
+private fun PollContent(messageId: Long, poll: TdApi.Poll, mine: Boolean) {
+    val tokens = forkTokens
+    val voted = poll.isClosed || poll.options.orEmpty().any { it != null && (it.isChosen || it.isBeingChosen) }
+    val textColor = if (mine) Color.White else MaterialTheme.colorScheme.onSurface
+    val mutedColor = if (mine) Color.White.copy(alpha = 0.75f) else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Column(Modifier.widthIn(max = 292.dp).padding(horizontal = 8.dp, vertical = 6.dp)) {
+        Text(
+            poll.question?.text.orEmpty(),
+            style = MaterialTheme.typography.titleSmall,
+            color = textColor,
+        )
+        Text(
+            when {
+                poll.type is TdApi.PollTypeQuiz -> "Викторина"
+                poll.isAnonymous -> "Анонимный опрос"
+                else -> "Опрос"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = mutedColor,
+        )
+        Spacer(Modifier.height(6.dp))
+
+        poll.options.orEmpty().filterNotNull().forEachIndexed { index, option ->
+            if (voted) {
+                // Результаты: процент + полоса.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                    Text(
+                        "${option.votePercentage}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = textColor,
+                        modifier = Modifier.width(40.dp),
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                option.text?.text.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = textColor,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            if (option.isChosen) {
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    ForkIcons.Check,
+                                    contentDescription = "ваш голос",
+                                    tint = if (mine) Color.White else tokens.checkCyan,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(3.dp))
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(if (mine) Color.White.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surfaceContainerHigh),
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth((option.votePercentage / 100f).coerceIn(0f, 1f))
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .then(
+                                        if (mine) Modifier.background(Color.White)
+                                        else Modifier.background(tokens.brandGradient),
+                                    ),
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Голосование: тап по варианту.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { MessageStore.votePoll(messageId, intArrayOf(index)) }
+                        .padding(vertical = 8.dp, horizontal = 2.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .border(1.5.dp, mutedColor, CircleShape),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        option.text?.text.orEmpty(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = textColor,
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        Text(
+            when {
+                poll.totalVoterCount == 0 -> "Пока никто не голосовал"
+                else -> "Проголосовало: ${poll.totalVoterCount}"
+            },
+            style = MaterialTheme.typography.labelSmall,
+            color = mutedColor,
+        )
     }
 }
 
 @Composable
 private fun BubbleText(
-    text: String,
+    text: androidx.compose.ui.text.AnnotatedString,
     time: String,
     status: OutStatus,
     mine: Boolean,
@@ -1238,7 +1379,25 @@ private fun MessageInput(chatId: Long) {
                     }
                 }
                 Spacer(Modifier.width(8.dp))
-                SendMicButton(hasText = text.isNotBlank(), onSend = { submit() }, context = context)
+                SendMicButton(
+                    hasText = text.isNotBlank(),
+                    onSend = { submit() },
+                    onSendSilent = {
+                        if (editing == null && text.isNotBlank()) {
+                            MessageStore.sendText(text, silent = true)
+                            text = ""
+                        } else {
+                            submit()
+                        }
+                    },
+                    onSendScheduled = { atUnix ->
+                        if (editing == null && text.isNotBlank()) {
+                            MessageStore.sendText(text, scheduleAtUnix = atUnix)
+                            text = ""
+                        }
+                    },
+                    context = context,
+                )
             }
             if (showStickers) {
                 app.fork.messenger.media.StickerPanel(onPick = { sticker ->
@@ -1253,9 +1412,17 @@ private fun MessageInput(chatId: Long) {
  * Круглая кнопка 52dp: микрофон ⇄ отправка с пружинным морфом (Fork Design Spec §7.4).
  * Удержание микрофона — запись голосового, кнопка растёт ×1.6.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun SendMicButton(hasText: Boolean, onSend: () -> Unit, context: android.content.Context) {
+private fun SendMicButton(
+    hasText: Boolean,
+    onSend: () -> Unit,
+    onSendSilent: () -> Unit = onSend,
+    onSendScheduled: (Int) -> Unit = {},
+    context: android.content.Context,
+) {
     val tokens = forkTokens
+    var sendMenu by remember { mutableStateOf(false) }
     val recording by app.fork.messenger.media.VoiceRecorder.recording.collectAsStateWithLifecycle()
     var hasPermission by remember {
         mutableStateOf(
@@ -1299,7 +1466,7 @@ private fun SendMicButton(hasText: Boolean, onSend: () -> Unit, context: android
             )
             .then(
                 if (hasText) {
-                    Modifier.clickable(onClick = onSend)
+                    Modifier.combinedClickable(onClick = onSend, onLongClick = { sendMenu = true })
                 } else {
                     Modifier.pointerInput(hasPermission) {
                         detectTapGestures(
@@ -1337,6 +1504,34 @@ private fun SendMicButton(hasText: Boolean, onSend: () -> Unit, context: android
                     modifier = Modifier.size(22.dp),
                 )
             }
+        }
+
+        // Долгий тап по «отправить»: без звука / по расписанию.
+        androidx.compose.material3.DropdownMenu(expanded = sendMenu, onDismissRequest = { sendMenu = false }) {
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Отправить без звука") },
+                onClick = { sendMenu = false; onSendSilent() },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Отправить через час") },
+                onClick = {
+                    sendMenu = false
+                    onSendScheduled((System.currentTimeMillis() / 1000 + 3600).toInt())
+                },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Завтра в 9:00") },
+                onClick = {
+                    sendMenu = false
+                    val cal = java.util.Calendar.getInstance().apply {
+                        add(java.util.Calendar.DAY_OF_YEAR, 1)
+                        set(java.util.Calendar.HOUR_OF_DAY, 9)
+                        set(java.util.Calendar.MINUTE, 0)
+                        set(java.util.Calendar.SECOND, 0)
+                    }
+                    onSendScheduled((cal.timeInMillis / 1000).toInt())
+                },
+            )
         }
     }
 }

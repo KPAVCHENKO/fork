@@ -4,6 +4,8 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -249,19 +251,51 @@ fun VoiceContent(voice: TdApi.VoiceNote, mine: Boolean) {
         }
         Spacer(Modifier.width(10.dp))
         Column {
-            Waveform(bars = bars, progress = progress, played = played, rest = rest)
-            Spacer(Modifier.height(4.dp))
-            val timeText = if (isThis && progress > 0f) {
-                "${formatDuration((voice.duration * progress).toInt())} / ${formatDuration(voice.duration)}"
-            } else {
-                formatDuration(voice.duration)
+            // Тап по дорожке — перемотка к этой позиции (если играет это голосовое).
+            Box(
+                Modifier.pointerInput(voice.voice.id, isThis) {
+                    detectTapGestures { offset ->
+                        if (isThis) AudioPlayer.seekTo(voice.voice.id, offset.x / size.width)
+                    }
+                },
+            ) {
+                Waveform(bars = bars, progress = progress, played = played, rest = rest)
             }
-            Text(
-                timeText,
-                style = TimestampStyle,
-                color = if (mine) Color.White.copy(alpha = 0.75f)
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val timeText = if (isThis && progress > 0f) {
+                    "${formatDuration((voice.duration * progress).toInt())} / ${formatDuration(voice.duration)}"
+                } else {
+                    formatDuration(voice.duration)
+                }
+                Text(
+                    timeText,
+                    style = TimestampStyle,
+                    color = if (mine) Color.White.copy(alpha = 0.75f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (isThis) {
+                    val speed by AudioPlayer.speed.collectAsStateWithLifecycle()
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = when (speed) {
+                            1.5f -> "×1,5"
+                            2f -> "×2"
+                            else -> "×1"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (mine) Color.White else tokens.checkCyan,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(
+                                if (mine) Color.White.copy(alpha = 0.22f)
+                                else tokens.checkCyan.copy(alpha = 0.15f),
+                            )
+                            .clickable { AudioPlayer.cycleSpeed() }
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                    )
+                }
+            }
         }
     }
 }

@@ -384,7 +384,11 @@ object MessageStore {
         }
     }
 
-    fun sendText(text: String) {
+    /**
+     * Отправка текста. silent — без звука у получателя;
+     * scheduleAtUnix > 0 — отложенная отправка в указанное время.
+     */
+    fun sendText(text: String, silent: Boolean = false, scheduleAtUnix: Int = 0) {
         val id = synchronized(lock) { chatId }
         if (id == 0L || text.isBlank()) return
         val message = TdApi.SendMessage().apply {
@@ -394,6 +398,14 @@ object MessageStore {
                 null,
                 true,
             )
+            if (silent || scheduleAtUnix > 0) {
+                options = TdApi.MessageSendOptions().apply {
+                    disableNotification = silent
+                    if (scheduleAtUnix > 0) {
+                        schedulingState = TdApi.MessageSchedulingStateSendAtDate(scheduleAtUnix, 0)
+                    }
+                }
+            }
         }
         TdClient.send(message)
         // Сообщение появится через updateNewMessage со статусом отправки.
@@ -509,6 +521,13 @@ object MessageStore {
 
     /** Текущий открытый чат (для пересылки и пр.). */
     fun currentChatId(): Long = synchronized(lock) { chatId }
+
+    /** Голос в опросе (optionIds — выбранные варианты, пустой массив отзывает голос). */
+    fun votePoll(messageId: Long, optionIds: IntArray) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        TdClient.send(TdApi.SetPollAnswer(id, messageId, optionIds))
+    }
 
     /** Пересылка сообщений между чатами (не зависит от открытого). */
     fun forwardMessages(fromChatId: Long, toChatId: Long, messageIds: LongArray) {
