@@ -3,6 +3,7 @@ package app.fork.messenger
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -586,16 +587,36 @@ private fun UpdateBanner(version: String, onClick: () -> Unit) {
 
 /** Ячейка чата 76dp: аватар 56 с онлайн-кольцом, имя, превью, время, бейдж. */
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private fun ChatRow(chat: UiChat, onClick: () -> Unit) {
     val tokens = forkTokens
+    var menuOpen by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(76.dp)
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text(if (chat.isPinned) "Открепить" else "Закрепить") },
+                onClick = { ChatStore.togglePin(chat.id); menuOpen = false },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text(if (chat.isMuted) "Включить звук" else "Без звука") },
+                onClick = { ChatStore.toggleMute(chat.id); menuOpen = false },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("В архив") },
+                onClick = { ChatStore.archive(chat.id, true); menuOpen = false },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text(if (chat.kind == ChatKind.PRIVATE) "Удалить" else "Покинуть") },
+                onClick = { ChatStore.deleteOrLeave(chat.id); menuOpen = false },
+            )
+        }
         ForkAvatar(
             size = 56.dp,
             avatarPath = chat.avatarPath,
