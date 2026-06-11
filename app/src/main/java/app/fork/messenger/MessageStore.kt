@@ -22,10 +22,15 @@ data class UiMessage(
     val canDelete: Boolean,
     val canDeleteForAll: Boolean,
     val outStatus: OutStatus,
+    val isEdited: Boolean = false,
+    val reactions: List<UiReaction> = emptyList(),
 )
 
 /** Статус исходящего сообщения для галочек. */
 enum class OutStatus { NONE, SENDING, FAILED, SENT, READ }
+
+/** Реакция на сообщение для отрисовки чипа. */
+data class UiReaction(val emoji: String, val count: Int, val chosen: Boolean)
 
 /** Черновик ответа: на какое сообщение отвечаем и как его показать в превью. */
 data class ReplyDraft(val messageId: Long, val preview: String, val sender: String?)
@@ -91,6 +96,9 @@ object MessageStore {
         UserCache.onStatusChanged = { userId ->
             if (_header.value?.userId == userId) rebuildHeader()
         }
+        TypingTracker.onChanged = { changedChat ->
+            if (synchronized(lock) { chatId } == changedChat) rebuildHeader()
+        }
 
         app.fork.messenger.notify.NotificationsCenter.clearForChat(id)
         TdClient.send(TdApi.OpenChat(id))
@@ -108,8 +116,11 @@ object MessageStore {
 
         val userId = (type as? TdApi.ChatTypePrivate)?.userId ?: 0L
         val isChannel = type is TdApi.ChatTypeSupergroup && type.isChannel
+        val isGroupChat = type is TdApi.ChatTypeBasicGroup ||
+            (type is TdApi.ChatTypeSupergroup && !type.isChannel)
 
-        val subtitle = when {
+        // «печатает…» имеет приоритет над обычным статусом (как в Telegram).
+        val subtitle = TypingTracker.label(id, isGroupChat) ?: when {
             userId != 0L -> UserCache.statusText(userId)
             isChannel -> "канал"
             else -> "группа"
@@ -258,6 +269,45 @@ object MessageStore {
         _reply.value = null
     }
 
+    // ---------- Реакции / редактирование / пересылка (для UI-биндинга) ----------
+
+    /** Ставит/снимает «лайк» (👍) или заданное эмодзи на сообщение. */
+    fun toggleReaction(messageId: Long, emoji: String = "👍") {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        val msg = synchronized(lock) { msgs.firstOrNull { it.id == messageId } }
+        val reactionType = TdApi.ReactionTypeEmoji(emoji)
+        val already = msg?.interactionInfo?.reactions?.reactions?.any {
+            it.isChosen && (it.type as? TdApi.ReactionTypeEmoji)?.emoji == emoji
+        } == true
+        if (already) {
+            TdClient.send(TdApi.RemoveMessageReaction(id, messageId, reactionType))
+        } else {
+            TdClient.send(TdApi.AddMessageReaction(id, messageId, reactionType, false, true))
+        }
+    }
+
+    /** Редактирует текст своего сообщения. */
+    fun editMessageText(messageId: Long, newText: String) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L || newText.isBlank()) return
+        TdClient.send(
+            TdApi.EditMessageText(
+                id, messageId, null,
+                TdApi.InputMessageText(TdApi.FormattedText(newText.trim(), null), null, false),
+            )
+        )
+    }
+
+    /** Пересылает сообщения из текущего чата в другой. */
+    fun forwardTo(targetChatId: Long, messageIds: LongArray) {
+        val from = synchronized(lock) { chatId }
+        if (from == 0L || targetChatId == 0L || messageIds.isEmpty()) return
+        TdClient.send(
+            TdApi.ForwardMessages(targetChatId, null, from, messageIds, null, false, false),
+        )
+    }
+
     // ---------- Ответы и удаление ----------
 
     fun startReply(messageId: Long) {
@@ -320,6 +370,20 @@ object MessageStore {
                 lastReadOutbox = obj.lastReadOutboxMessageId
                 rebuild()
             }
+
+            is TdApi.UpdateMessageInteractionInfo -> ifCurrent(obj.chatId) {
+                synchronized(lock) {
+                    msgs.firstOrNull { it.id == obj.messageId }?.interactionInfo = obj.interactionInfo
+                }
+                rebuild()
+            }
+
+            is TdApi.UpdateMessageEdited -> ifCurrent(obj.chatId) {
+                synchronized(lock) {
+                    msgs.firstOrNull { it.id == obj.messageId }?.editDate = obj.editDate
+                }
+                rebuild()
+            }
         }
     }
 
@@ -370,6 +434,11 @@ object MessageStore {
                     m.id <= lastReadOutbox -> OutStatus.READ
                     else -> OutStatus.SENT
                 },
+                isEdited = m.editDate > 0,
+                reactions = m.interactionInfo?.reactions?.reactions?.mapNotNull { r ->
+                    val e = (r.type as? TdApi.ReactionTypeEmoji)?.emoji ?: return@mapNotNull null
+                    UiReaction(e, r.totalCount, r.isChosen)
+                } ?: emptyList(),
             )
         }
     }

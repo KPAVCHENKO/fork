@@ -123,6 +123,7 @@ object TdClient {
     private fun onUpdate(obj: TdApi.Object) {
         UserCache.handleUpdate(obj)
         app.fork.messenger.media.FileHub.handleUpdate(obj)
+        TypingTracker.handleUpdate(obj)
         ChatStore.handleUpdate(obj)
         MessageStore.handleUpdate(obj)
         app.fork.messenger.notify.NotificationsCenter.handleUpdate(obj)
