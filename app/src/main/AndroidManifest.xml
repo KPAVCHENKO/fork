@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Тип сети для TDLib: мгновенное переподключение при смене Wi-Fi/мобильной -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Установка обновлений из GitHub Releases через PackageInstaller -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Локальные уведомления о новых сообщениях -->

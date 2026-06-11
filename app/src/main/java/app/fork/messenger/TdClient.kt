@@ -222,8 +222,9 @@ object TdClient {
             }
         }
 
-        // Подсказываем TDLib тип сети — он подстраивает таймауты и стратегию докачки.
-        client?.send(TdApi.SetNetworkType(TdApi.NetworkTypeOther()), null)
+        // Актуальный тип сети: TDLib подстраивает таймауты, а смена типа
+        // мгновенно переоткрывает соединения (см. NetworkMonitor).
+        client?.send(TdApi.SetNetworkType(app.fork.messenger.net.NetworkMonitor.current()), null)
     }
 
     /**
@@ -233,6 +234,11 @@ object TdClient {
      */
     fun setOnline(online: Boolean) {
         client?.send(TdApi.SetOption("online", TdApi.OptionValueBoolean(online)), null)
+        // Возврат на передний план при «висящем» соединении: форсируем
+        // переоткрытие, не дожидаясь таймаута бэкофа TDLib.
+        if (online && _connectionState.value != "подключено") {
+            app.fork.messenger.net.NetworkMonitor.push("foreground")
+        }
     }
 
     /**
