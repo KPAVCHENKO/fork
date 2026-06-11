@@ -27,7 +27,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -119,17 +121,43 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit) {
                 UpdateBanner(version = available.release.version, onClick = onSettings)
             }
 
-            if (chats.isEmpty()) {
+            var tab by rememberSaveable { mutableStateOf(0) }
+            val tabs = listOf("Все", "Личные", "Группы", "Каналы")
+            val filtered = when (tab) {
+                1 -> chats.filter { it.kind == ChatKind.PRIVATE }
+                2 -> chats.filter { it.kind == ChatKind.GROUP }
+                3 -> chats.filter { it.kind == ChatKind.CHANNEL }
+                else -> chats
+            }
+
+            if (chats.isNotEmpty()) {
+                ScrollableTabRow(
+                    selectedTabIndex = tab,
+                    edgePadding = 8.dp,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    divider = {},
+                ) {
+                    tabs.forEachIndexed { index, label ->
+                        Tab(
+                            selected = tab == index,
+                            onClick = { tab = index },
+                            text = { Text(label, fontWeight = if (tab == index) FontWeight.SemiBold else FontWeight.Normal) },
+                        )
+                    }
+                }
+            }
+
+            if (filtered.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    if (loading) {
+                    if (loading && chats.isEmpty()) {
                         CircularProgressIndicator()
                     } else {
-                        Text("Чатов пока нет", color = MaterialTheme.colorScheme.outline)
+                        Text("Здесь пусто", color = MaterialTheme.colorScheme.outline)
                     }
                 }
             } else {
                 LazyColumn(Modifier.fillMaxSize()) {
-                    items(chats, key = { it.id }) { chat ->
+                    items(filtered, key = { it.id }) { chat ->
                         ChatRow(chat = chat, onClick = { onChatClick(chat.id) })
                     }
                 }

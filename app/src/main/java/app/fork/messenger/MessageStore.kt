@@ -16,6 +16,8 @@ data class UiMessage(
     val senderSeed: Long,
     val showSender: Boolean,
     val isFirstOfGroup: Boolean,
+    val isLastOfGroup: Boolean,
+    val dateLabel: String,
     val replyText: String?,
     val canDelete: Boolean,
     val canDeleteForAll: Boolean,
@@ -215,6 +217,20 @@ object MessageStore {
         )
     }
 
+    fun sendSticker(sticker: TdApi.Sticker) {
+        val remoteId = sticker.sticker.remote?.id
+        if (remoteId.isNullOrBlank()) return
+        send(
+            TdApi.InputMessageSticker(
+                TdApi.InputFileRemote(remoteId),
+                null,
+                sticker.width,
+                sticker.height,
+                sticker.emoji,
+            )
+        )
+    }
+
     fun sendVoice(path: String, durationSeconds: Int, waveform: ByteArray) {
         send(
             TdApi.InputMessageVoiceNote(
@@ -325,6 +341,9 @@ object MessageStore {
             val prev = snapshot.getOrNull(i - 1)
             val prevSenderId = (prev?.senderId as? TdApi.MessageSenderUser)?.userId ?: -1L
             val firstOfGroup = prev == null || prevSenderId != senderId || prev.isOutgoing != m.isOutgoing
+            val next = snapshot.getOrNull(i + 1)
+            val nextSenderId = (next?.senderId as? TdApi.MessageSenderUser)?.userId ?: -1L
+            val lastOfGroup = next == null || nextSenderId != senderId || next.isOutgoing != m.isOutgoing
             val replyTo = m.replyTo as? TdApi.MessageReplyToMessage
             UiMessage(
                 id = m.id,
@@ -338,6 +357,8 @@ object MessageStore {
                 senderSeed = senderId,
                 showSender = isGroup && !m.isOutgoing && firstOfGroup,
                 isFirstOfGroup = firstOfGroup,
+                isLastOfGroup = lastOfGroup,
+                dateLabel = MessageFormat.dayLabel(m.date),
                 replyText = replyTo?.content?.let { MessageFormat.contentText(it) }
                     ?: if (replyTo != null) "Сообщение" else null,
                 canDelete = chatCanDeleteForSelf || chatCanDeleteForAll || m.isOutgoing,

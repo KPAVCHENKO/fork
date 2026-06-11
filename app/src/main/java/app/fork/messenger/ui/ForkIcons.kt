@@ -2,6 +2,8 @@ package app.fork.messenger.ui
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
@@ -92,11 +94,39 @@ object ForkIcons {
         icon("Close", "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z")
     }
 
+    val Sticker: ImageVector by lazy {
+        icon(
+            "Sticker",
+            "M5.5 2C3.57 2 2 3.57 2 5.5v13C2 20.43 3.57 22 5.5 22H14l8,-8V5.5C22 3.57 20.43 2 18.5 2h-13zM14 20v-3.5c0,-1.38 1.12,-2.5 2.5,-2.5H20L14 20zm5.5,-8H16.5c-2.48 0,-4.5 2.02,-4.5 4.5V20H5.5C4.67 20 4 19.33 4 18.5v-13C4 4.67 4.67 4 5.5 4h13c0.83 0 1.5 0.67 1.5 1.5V12z",
+        )
+    }
+
     val Search: ImageVector by lazy {
         icon(
             "Search",
             "M15.5 14h-0.79l-0.28,-0.27c0.98,-1.14 1.57,-2.62 1.57,-4.23 0,-3.59 -2.91,-6.5 -6.5,-6.5S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09,-0.59 4.23,-1.57l0.27 0.28v0.79l5 4.99L20.49 19l-4.99,-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z",
         )
+    }
+
+    /** Шеврон «вниз» — кнопка прокрутки к последним сообщениям. */
+    val Down: ImageVector by lazy {
+        icon("Down", "M7.41 8.59L12 13.17l4.59,-4.58L18 10l-6 6,-6,-6z")
+    }
+
+    /** Смайлик для поля ввода. */
+    val Smile: ImageVector by lazy {
+        icon(
+            "Smile",
+            "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0,-8,-3.58 -8,-8s3.58,-8 8,-8 8 3.58 8 8,-3.58 8,-8 8zm3.5,-9c0.83 0 1.5,-0.67 1.5,-1.5S16.33 8 15.5 8 14 8.67 14 9.5s0.67 1.5 1.5 1.5zm-7 0c0.83 0 1.5,-0.67 1.5,-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31,-1.46 5.11,-3.5H6.89c0.8 2.04 2.78 3.5 5.11 3.5z",
+        )
+    }
+
+    /**
+     * Вилка-логотип одним контуром (stroke 1.6dp) — пустые состояния
+     * и бренд на логине (Fork Design Spec §7.9).
+     */
+    val ForkMark: ImageVector by lazy {
+        strokeIcon("ForkMark", "M8 3v5M12 3v7M16 3v5M8 8c0 2.21 1.79 4 4 4s4,-1.79 4,-4M12 12v9")
     }
 
     private fun icon(name: String, pathData: String): ImageVector =
@@ -108,5 +138,23 @@ object ForkIcons {
             viewportHeight = 24f,
         )
             .addPath(pathData = addPathNodes(pathData), fill = SolidColor(Color.Black))
+            .build()
+
+    private fun strokeIcon(name: String, pathData: String): ImageVector =
+        ImageVector.Builder(
+            name = name,
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f,
+        )
+            .addPath(
+                pathData = addPathNodes(pathData),
+                fill = null,
+                stroke = SolidColor(Color.Black),
+                strokeLineWidth = 1.6f,
+                strokeLineCap = StrokeCap.Round,
+                strokeLineJoin = StrokeJoin.Round,
+            )
             .build()
 }

@@ -19,11 +19,17 @@ object UserCache {
             is TdApi.UpdateUserStatus -> {
                 statuses[obj.userId] = obj.status
                 onStatusChanged?.invoke(obj.userId)
+                // Онлайн-кольцо в списке чатов: перерисовать ячейки.
+                ChatStore.invalidate()
             }
         }
     }
 
     fun user(userId: Long): TdApi.User? = users[userId]
+
+    /** Пользователь сейчас в сети? Для градиентного онлайн-кольца аватара. */
+    fun isOnline(userId: Long): Boolean =
+        (statuses[userId] ?: users[userId]?.status) is TdApi.UserStatusOnline
 
     /** Статус «онлайн / был(а) …» как в Telegram. */
     fun statusText(userId: Long): String {

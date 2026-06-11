@@ -5,6 +5,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.drinkless.tdlib.TdApi
 
+/** Тип чата для вкладок-папок. */
+enum class ChatKind { PRIVATE, GROUP, CHANNEL }
+
 /** Готовая к показу строка списка чатов. */
 data class UiChat(
     val id: Long,
@@ -15,9 +18,11 @@ data class UiChat(
     val isPinned: Boolean,
     val isMuted: Boolean,
     val isChannel: Boolean,
+    val kind: ChatKind,
     val avatarPath: String?,
     val initials: String,
     val colorSeed: Long,
+    val isOnline: Boolean,
 )
 
 /**
@@ -139,6 +144,11 @@ object ChatStore {
         val type = chat.type
         val isChannel = type is TdApi.ChatTypeSupergroup && type.isChannel
         val isGroup = type is TdApi.ChatTypeBasicGroup || (type is TdApi.ChatTypeSupergroup && !type.isChannel)
+        val kind = when {
+            isChannel -> ChatKind.CHANNEL
+            isGroup -> ChatKind.GROUP
+            else -> ChatKind.PRIVATE
+        }
 
         val last = chat.lastMessage
         val senderPrefix = when {
@@ -160,9 +170,11 @@ object ChatStore {
             isPinned = chat.positions.any { it.list is TdApi.ChatListMain && it.isPinned },
             isMuted = (chat.notificationSettings?.takeIf { !it.useDefaultMuteFor }?.muteFor ?: 0) > 0,
             isChannel = isChannel,
+            kind = kind,
             avatarPath = avatarPath,
             initials = MessageFormat.initials(chat.title),
             colorSeed = chat.id,
+            isOnline = (type as? TdApi.ChatTypePrivate)?.let { UserCache.isOnline(it.userId) } == true,
         )
     }
 }

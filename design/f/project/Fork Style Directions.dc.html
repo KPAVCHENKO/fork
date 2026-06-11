@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #E8EBF1; }
+  </style>
+</helmet>
+<div style="font-family:'Manrope','Segoe UI',system-ui,sans-serif;background:#E8EBF1;min-height:100vh;padding:48px 56px 110px;box-sizing:border-box;">
+
+  <!-- ============ INTRO ============ -->
+  <div style="max-width:1380px;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(35,98,253,0.30);">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round"><path d="M8 3v4.5c0 2 1.6 3.5 4 3.5s4-1.5 4-3.5V3"></path><path d="M12 3v8"></path><path d="M12 11v10"></path></svg>
+      </div>
+      <h1 style="margin:0;font-size:30px;font-weight:800;color:#171C26;letter-spacing:-0.4px;">Fork — три направления визуального стиля</h1>
+    </div>
+    <p style="margin:10px 0 0 58px;font-size:14.5px;line-height:1.55;color:#5B6575;max-width:860px;">Тёмная тема, три ключевых экрана на направление: логин → список чатов → чат. Все три варианта строятся на одной основе из брифа и отличаются «дозой» градиента, материалом поверхностей и контрастом.</p>
+
+    <div style="margin:24px 0 0 0;background:#FFFFFF;border-radius:20px;padding:24px 28px;box-shadow:0 2px 8px rgba(23,28,38,0.05);display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px;max-width:1380px;box-sizing:border-box;">
+      <div>
+        <div style="font-size:12px;font-weight:800;letter-spacing:0.8px;color:#2362FD;text-transform:uppercase;">Общая основа</div>
+        <ul style="margin:10px 0 0;padding-left:18px;font-size:13.5px;line-height:1.65;color:#404A5A;">
+          <li>Бренд-градиент <b>#2362FD → #00B8D9</b> (135°) — отправка, непрочитанные, исходящие пузыри, онлайн-кольцо, waveform</li>
+          <li>Шрифт <b>Manrope</b> (вариативный, кириллица), крупные жирные заголовки</li>
+          <li>Очень круглая геометрия: пузыри 20dp+, карточки 24–28dp</li>
+          <li>База тёмной темы — глубокий сине-серый в тон индиго</li>
+          <li>Циановые галочки, стеклянные капсулы, вилка-логотип</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:800;letter-spacing:0.8px;color:#2362FD;text-transform:uppercase;">Что варьируется</div>
+        <ul style="margin:10px 0 0;padding-left:18px;font-size:13.5px;line-height:1.65;color:#404A5A;">
+          <li><b>01 Aurora</b> — градиентная «шапка»-кэп, спокойные карточные поверхности, ближе всего к привычному M3</li>
+          <li><b>02 Frost</b> — амбиентные свечения фона, стеклянные панели с blur, парящие элементы</li>
+          <li><b>03 Neon Ink</b> — почти чёрная база, крупнее типографика, градиент как неон: кольца, контуры, свечение</li>
+        </ul>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:800;letter-spacing:0.8px;color:#2362FD;text-transform:uppercase;">Допущения</div>
+        <ul style="margin:10px 0 0;padding-left:18px;font-size:13.5px;line-height:1.65;color:#404A5A;">
+          <li>UX-схема Telegram не тронута — меняется только «кожа»</li>
+          <li>Edge-to-edge: контент уходит под статусбар</li>
+          <li>Всё реализуемо в Compose + M3: Brush-градиенты, blur, spring/tween</li>
+          <li>Контент в макетах — «рыба» на русском (семья и друзья)</li>
+          <li>Можно собрать «микс»: например, база 01 + пузыри 03</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ DIRECTION 1 · AURORA ============ -->
+  <section style="margin-top:64px;">
+    <div style="display:flex;align-items:baseline;gap:14px;">
+      <span style="font-size:14px;font-weight:800;color:#2362FD;">01</span>
+      <h2 style="margin:0;font-size:24px;font-weight:800;color:#171C26;letter-spacing:-0.3px;">Aurora — градиентный кэп</h2>
+    </div>
+    <p style="margin:6px 0 26px 30px;font-size:14px;line-height:1.5;color:#5B6575;max-width:780px;">Самое «по учебнику» из трёх: смелая градиентная шапка со скруглением 30dp на списке чатов, спокойные сине-серые поверхности, карточный баннер обновления, градиентный FAB. Безопасно, но заметно дороже стокового Telegram.</p>
+
+    <div style="display:flex;gap:36px;align-items:flex-start;flex-wrap:wrap;margin-left:30px;">
+
+      <!-- ===== 1.1 LOGIN ===== -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:12px;font-weight:800;color:#8A93A3;letter-spacing:0.6px;text-transform:uppercase;">1.1 · Логин</div>
+        <div data-screen-label="01 Aurora — Логин" style="position:relative;width:412px;height:892px;border-radius:40px;border:10px solid #05070D;box-shadow:0 24px 60px rgba(10,16,32,0.35);overflow:hidden;flex-shrink:0;background:#101729;">
+          <div style="position:absolute;inset:0;background:linear-gradient(155deg,#2362FD 0%,#1670EC 42%,#00B8D9 100%);"></div>
+          <div style="position:absolute;top:-90px;right:-110px;width:340px;height:340px;border-radius:50%;background:rgba(255,255,255,0.10);"></div>
+          <div style="position:absolute;top:120px;right:-50px;transform:rotate(18deg);opacity:0.16;">
+            <svg width="260" height="260" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.1" stroke-linecap="round"><path d="M8 3v4.5c0 2 1.6 3.5 4 3.5s4-1.5 4-3.5V3"></path><path d="M12 3v8"></path><path d="M12 11v10"></path></svg>
+          </div>
+          <!-- status bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;">
+            <div style="font-size:14px;font-weight:700;color:#FFFFFF;">9:30</div>
+            <div style="display:flex;align-items:center;gap:5px;opacity:0.95;">
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 13.3L.67 5.97a10.37 10.37 0 0114.66 0L8 13.3z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M14.67 14.67V1.33L1.33 14.67h13.34z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="3.75" y="2" width="8.5" height="13" rx="1.5" fill="#FFFFFF"></rect><rect x="5.5" y="0.9" width="5" height="2" rx="0.5" fill="#FFFFFF"></rect></svg>
+            </div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:#05070D;z-index:41;"></div>
+          <!-- content -->
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding-top:30px;">
+              <svg width="74" height="74" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.7" stroke-linecap="round"><path d="M8 3v4.5c0 2 1.6 3.5 4 3.5s4-1.5 4-3.5V3"></path><path d="M12 3v8"></path><path d="M12 11v10"></path></svg>
+              <div style="font-size:56px;font-weight:800;color:#FFFFFF;letter-spacing:-1.5px;line-height:1;">Fork</div>
+              <div style="font-size:16px;font-weight:600;color:rgba(255,255,255,0.85);">Мессенджер для своих</div>
+            </div>
+            <div style="background:#101729;border-radius:36px 36px 0 0;padding:14px 24px 42px;box-shadow:0 -16px 40px rgba(8,14,30,0.35);">
+              <div style="width:36px;height:4px;border-radius:2px;background:rgba(143,160,191,0.30);margin:0 auto 22px;"></div>
+              <div style="font-size:26px;font-weight:800;color:#F1F5FF;letter-spacing:-0.4px;">Ваш телефон</div>
+              <div style="margin-top:6px;font-size:14px;line-height:1.5;color:#8FA0BF;">Войдём по номеру, к которому привязан ваш аккаунт Telegram</div>
+              <div style="margin-top:22px;height:56px;border-radius:18px;background:#19223A;display:flex;align-items:center;justify-content:space-between;padding:0 18px;box-sizing:border-box;">
+                <span style="font-size:16px;font-weight:600;color:#F1F5FF;">Россия</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6C89" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+              </div>
+              <div style="margin-top:12px;height:56px;border-radius:18px;background:#19223A;border:1.5px solid #2362FD;display:flex;align-items:center;gap:12px;padding:0 18px;box-sizing:border-box;box-shadow:0 0 0 4px rgba(35,98,253,0.14);">
+                <span style="font-size:16px;font-weight:700;color:#F1F5FF;">+7</span>
+                <div style="width:1px;height:24px;background:rgba(143,160,191,0.25);"></div>
+                <span style="font-size:16px;font-weight:600;color:#F1F5FF;">912 4</span>
+                <div style="width:2px;height:22px;border-radius:1px;background:#00B8D9;margin-left:-8px;"></div>
+                <span style="font-size:16px;font-weight:500;color:#48577A;margin-left:-8px;">00-00-00</span>
+              </div>
+              <div style="margin-top:20px;height:56px;border-radius:28px;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 12px 28px rgba(35,98,253,0.35);">
+                <span style="font-size:16px;font-weight:800;color:#FFFFFF;letter-spacing:0.2px;">Продолжить</span>
+              </div>
+              <div style="margin-top:16px;text-align:center;font-size:12px;color:#48577A;">Продолжая, вы принимаете Условия использования</div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);z-index:40;"></div>
+        </div>
+      </div>
+
+      <!-- ===== 1.2 CHAT LIST ===== -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:12px;font-weight:800;color:#8A93A3;letter-spacing:0.6px;text-transform:uppercase;">1.2 · Список чатов</div>
+        <div data-screen-label="01 Aurora — Список чатов" style="position:relative;width:412px;height:892px;border-radius:40px;border:10px solid #05070D;box-shadow:0 24px 60px rgba(10,16,32,0.35);overflow:hidden;flex-shrink:0;background:#101729;">
+          <!-- status bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;">
+            <div style="font-size:14px;font-weight:700;color:#FFFFFF;">9:30</div>
+            <div style="display:flex;align-items:center;gap:5px;opacity:0.95;">
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 13.3L.67 5.97a10.37 10.37 0 0114.66 0L8 13.3z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M14.67 14.67V1.33L1.33 14.67h13.34z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="3.75" y="2" width="8.5" height="13" rx="1.5" fill="#FFFFFF"></rect><rect x="5.5" y="0.9" width="5" height="2" rx="0.5" fill="#FFFFFF"></rect></svg>
+            </div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:#05070D;z-index:41;"></div>
+          <!-- gradient cap -->
+          <div style="background:linear-gradient(135deg,#2362FD 0%,#0E8BE2 55%,#00B8D9 100%);border-radius:0 0 30px 30px;padding:58px 20px 18px;box-shadow:0 14px 34px rgba(20,80,200,0.35);">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:9px;">
+                <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"><path d="M8 3v4.5c0 2 1.6 3.5 4 3.5s4-1.5 4-3.5V3"></path><path d="M12 3v8"></path><path d="M12 11v10"></path></svg>
+                <span style="font-size:23px;font-weight:800;color:#FFFFFF;letter-spacing:-0.4px;">Fork</span>
+              </div>
+              <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#FFB547,#FF7A3D);border:2px solid rgba(255,255,255,0.55);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#FFFFFF;">Я</div>
+            </div>
+            <div style="margin-top:16px;height:46px;border-radius:23px;background:rgba(255,255,255,0.20);display:flex;align-items:center;gap:10px;padding:0 16px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+              <span style="font-size:15px;font-weight:500;color:rgba(255,255,255,0.78);">Поиск</span>
+            </div>
+            <div style="margin-top:14px;display:flex;gap:8px;">
+              <div style="height:32px;border-radius:16px;background:#FFFFFF;color:#2362FD;display:flex;align-items:center;padding:0 16px;font-size:13px;font-weight:800;">Все</div>
+              <div style="height:32px;border-radius:16px;background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.92);display:flex;align-items:center;padding:0 16px;font-size:13px;font-weight:700;">Семья</div>
+              <div style="height:32px;border-radius:16px;background:rgba(255,255,255,0.18);color:rgba(255,255,255,0.92);display:flex;align-items:center;gap:6px;padding:0 16px;font-size:13px;font-weight:700;">Личное<span style="min-width:18px;height:18px;border-radius:9px;background:rgba(255,255,255,0.92);color:#2362FD;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;box-sizing:border-box;">4</span></div>
+            </div>
+          </div>
+          <!-- update banner -->
+          <div style="margin:14px 16px 4px;background:#19223A;border-radius:20px;padding:12px 14px;display:flex;align-items:center;gap:12px;">
+            <div style="width:38px;height:38px;border-radius:13px;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 19h16"></path></svg>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:14px;font-weight:700;color:#F1F5FF;">Доступно обновление</div>
+              <div style="font-size:12.5px;color:#8FA0BF;margin-top:1px;">Fork 2.4 — что нового</div>
+            </div>
+            <div style="font-size:13px;font-weight:800;color:#2BCDEA;">Установить</div>
+          </div>
+          <!-- chats -->
+          <div style="display:flex;flex-direction:column;padding:6px 0;">
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">С</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Семья</span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">21:14</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;">
+                  <span style="font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span style="color:#B9C5DC;font-weight:600;">Папа:</span> Едем в 19:00, не опаздывайте 🚗</span>
+                  <span style="min-width:22px;height:22px;border-radius:11px;background:linear-gradient(135deg,#2362FD,#00B8D9);color:#FFFFFF;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 7px;box-sizing:border-box;flex-shrink:0;">3</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;background:rgba(35,98,253,0.07);">
+              <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);padding:2px;box-sizing:border-box;flex-shrink:0;">
+                <div style="width:100%;height:100%;border-radius:50%;background:#101729;padding:2px;box-sizing:border-box;">
+                  <div style="width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,#8B5CF6,#4C7DFF);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700;color:#FFFFFF;">А</div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Аня</span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">20:58</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;">
+                  <span style="font-size:14px;color:#2BCDEA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2BCDEA" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>Голосовое сообщение · 0:42</span>
+                  <span style="min-width:22px;height:22px;border-radius:11px;background:linear-gradient(135deg,#2362FD,#00B8D9);color:#FFFFFF;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 7px;box-sizing:border-box;flex-shrink:0;">1</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#FF6F91,#FF9F6E);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">М</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Мама</span>
+                  <span style="display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:#5E6C89;"><svg width="16" height="10" viewBox="0 0 18 10" fill="none" stroke="#2BCDEA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4 8.5L9 2"></path><path d="M8 5.5L11 8.5L16 2"></path></svg>19:32</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Купил молоко и хлеб, буду через час</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#00C885,#00B8D9);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">Д</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Дима</span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">18:05</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🦊 Стикер</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#FFB547,#FF7A3D);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">К</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="display:flex;align-items:center;gap:6px;font-size:16px;font-weight:700;color:#F1F5FF;">Книжный клуб<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5E6C89" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.7 21a2 2 0 0 1-3.4 0"></path><path d="M18.6 13c-.4-1.5-.6-3.2-.6-5a6 6 0 0 0-9.3-5"></path><path d="M6.3 6.3C6.1 6.8 6 7.4 6 8c0 7-3 9-3 9h14"></path><path d="M2 2l20 20"></path></svg></span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">15:47</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span style="color:#B9C5DC;font-weight:600;">Оля:</span> Скину статью завтра утром</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#4C7DFF,#22D3EE);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">П</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Папа</span>
+                  <span style="display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:#5E6C89;"><svg width="16" height="10" viewBox="0 0 18 10" fill="none" stroke="#5E6C89" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5.5L11 8.5L16 2"></path></svg>Вт</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Ок, понял. Завтра созвонимся</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#F45B9A,#8B5CF6);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">Л</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Лена</span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">Пн</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📷 Фото</div>
+              </div>
+            </div>
+          </div>
+          <!-- FAB -->
+          <div style="position:absolute;right:20px;bottom:28px;width:60px;height:60px;border-radius:22px;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;box-shadow:0 14px 30px rgba(35,98,253,0.45);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+          </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);z-index:40;"></div>
+        </div>
+      </div>
+
+      <!-- ===== 1.3 CHAT ===== -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:12px;font-weight:800;color:#8A93A3;letter-spacing:0.6px;text-transform:uppercase;">1.3 · Чат</div>
+        <div data-screen-label="01 Aurora — Чат" style="position:relative;width:412px;height:892px;border-radius:40px;border:10px solid #05070D;box-shadow:0 24px 60px rgba(10,16,32,0.35);overflow:hidden;flex-shrink:0;background:#0E1424;">
+          <!-- status bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;">
+            <div style="font-size:14px;font-weight:700;color:#FFFFFF;">9:30</div>
+            <div style="display:flex;align-items:center;gap:5px;opacity:0.95;">
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 13.3L.67 5.97a10.37 10.37 0 0114.66 0L8 13.3z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M14.67 14.67V1.33L1.33 14.67h13.34z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="3.75" y="2" width="8.5" height="13" rx="1.5" fill="#FFFFFF"></rect><rect x="5.5" y="0.9" width="5" height="2" rx="0.5" fill="#FFFFFF"></rect></svg>
+            </div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:#05070D;z-index:41;"></div>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;">
+            <!-- chat header -->
+            <div style="background:#101729;padding:50px 12px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(143,160,191,0.10);">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B9C5DC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:4px;"><path d="M15 18l-6-6 6-6"></path></svg>
+              <div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);padding:2px;box-sizing:border-box;">
+                <div style="width:100%;height:100%;border-radius:50%;background:#101729;padding:2px;box-sizing:border-box;">
+                  <div style="width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,#8B5CF6,#4C7DFF);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#FFFFFF;">А</div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:17px;font-weight:800;color:#F1F5FF;letter-spacing:-0.2px;">Аня</div>
+                <div style="font-size:13px;font-weight:600;color:#2BCDEA;margin-top:1px;">в сети</div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#8FA0BF" style="margin-right:8px;"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+            </div>
+            <!-- messages -->
+            <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding:12px 14px;">
+              <div style="align-self:center;padding:5px 14px;border-radius:14px;background:rgba(25,34,58,0.78);border:1px solid rgba(255,255,255,0.07);backdrop-filter:blur(8px);font-size:12.5px;font-weight:700;color:#9DACC9;">Сегодня</div>
+              <div style="align-self:flex-start;max-width:78%;background:#1B2742;border-radius:20px 20px 20px 6px;padding:10px 14px;">
+                <div style="font-size:15.5px;line-height:1.45;color:#EAF0FB;">Привет! Смотри, что нашла 😍</div>
+                <div style="display:flex;justify-content:flex-end;margin-top:2px;"><span style="font-size:11px;font-weight:600;color:#5E6C89;">10:12</span></div>
+              </div>
+              <div style="align-self:flex-start;max-width:78%;background:#1B2742;border-radius:20px;padding:4px;position:relative;">
+                <div style="width:252px;height:172px;border-radius:17px;background:linear-gradient(160deg,#26334F,#161F38);display:flex;align-items:center;justify-content:center;">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.30)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="M5 17l5-5 4 4 3-3 3 3"></path></svg>
+                </div>
+                <div style="position:absolute;right:12px;bottom:12px;padding:2px 8px;border-radius:10px;background:rgba(5,9,18,0.55);backdrop-filter:blur(6px);font-size:11px;font-weight:600;color:rgba(255,255,255,0.9);">10:12</div>
+              </div>
+              <div style="align-self:flex-end;max-width:78%;background:linear-gradient(135deg,#2362FD,#00B8D9);border-radius:20px 20px 6px 20px;padding:10px 14px;box-shadow:0 6px 18px rgba(35,98,253,0.25);">
+                <div style="font-size:15.5px;line-height:1.45;color:#FFFFFF;">Ого! Это где? 😍</div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:2px;"><span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.75);">10:14</span><svg width="15" height="9" viewBox="0 0 18 10" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4 8.5L9 2"></path><path d="M8 5.5L11 8.5L16 2"></path></svg></div>
+              </div>
+              <div style="align-self:flex-start;max-width:82%;background:#1B2742;border-radius:20px 20px 20px 6px;padding:10px 12px;">
+                <div style="display:flex;align-items:center;gap:11px;">
+                  <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="#FFFFFF"><path d="M8 5v14l11-7z"></path></svg>
+                  </div>
+                  <div>
+                    <div style="display:flex;align-items:flex-end;gap:3px;height:26px;">
+                      <div style="width:3px;height:8px;border-radius:2px;background:#2F6BFD;"></div>
+                      <div style="width:3px;height:14px;border-radius:2px;background:#2F6BFD;"></div>
+                      <div style="width:3px;height:20px;border-radius:2px;background:#2F6BFD;"></div>
+                      <div style="width:3px;height:25px;border-radius:2px;background:#1A82EE;"></div>
+                      <div style="width:3px;height:17px;border-radius:2px;background:#1A82EE;"></div>
+                      <div style="width:3px;height:11px;border-radius:2px;background:#1A82EE;"></div>
+                      <div style="width:3px;height:21px;border-radius:2px;background:#0C9FE0;"></div>
+                      <div style="width:3px;height:26px;border-radius:2px;background:#0C9FE0;"></div>
+                      <div style="width:3px;height:15px;border-radius:2px;background:#0C9FE0;"></div>
+                      <div style="width:3px;height:9px;border-radius:2px;background:#00B8D9;"></div>
+                      <div style="width:3px;height:13px;border-radius:2px;background:#00B8D9;"></div>
+                      <div style="width:3px;height:19px;border-radius:2px;background:#00B8D9;"></div>
+                      <div style="width:3px;height:25px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                      <div style="width:3px;height:17px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                      <div style="width:3px;height:11px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                      <div style="width:3px;height:15px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                      <div style="width:3px;height:21px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                      <div style="width:3px;height:13px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                      <div style="width:3px;height:9px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                      <div style="width:3px;height:7px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                      <div style="width:3px;height:11px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                      <div style="width:3px;height:6px;border-radius:2px;background:rgba(255,255,255,0.28);"></div>
+                    </div>
+                    <div style="margin-top:4px;font-size:12px;font-weight:600;color:#8FA0BF;">0:26 / 0:42</div>
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:2px;"><span style="font-size:11px;font-weight:600;color:#5E6C89;">10:16</span></div>
+              </div>
+              <div style="align-self:flex-end;max-width:78%;background:linear-gradient(135deg,#2362FD,#00B8D9);border-radius:20px 20px 6px 20px;padding:8px 10px 10px;box-shadow:0 6px 18px rgba(35,98,253,0.25);">
+                <div style="background:rgba(255,255,255,0.18);border-left:3px solid #FFFFFF;border-radius:10px;padding:6px 10px;">
+                  <div style="font-size:12.5px;font-weight:800;color:#FFFFFF;">Аня</div>
+                  <div style="font-size:12.5px;color:rgba(255,255,255,0.85);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Голосовое сообщение</div>
+                </div>
+                <div style="font-size:15.5px;line-height:1.45;color:#FFFFFF;margin-top:6px;padding:0 4px;">Поехали туда на выходных? 🚗</div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:2px;padding:0 4px;"><span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.75);">10:18</span><svg width="15" height="9" viewBox="0 0 18 10" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4 8.5L9 2"></path><path d="M8 5.5L11 8.5L16 2"></path></svg></div>
+              </div>
+              <div style="align-self:flex-start;background:#1B2742;border-radius:20px 20px 20px 6px;padding:14px 16px;display:flex;align-items:center;gap:5px;">
+                <div style="width:7px;height:7px;border-radius:50%;background:#8FA0BF;"></div>
+                <div style="width:7px;height:7px;border-radius:50%;background:rgba(143,160,191,0.55);"></div>
+                <div style="width:7px;height:7px;border-radius:50%;background:rgba(143,160,191,0.30);"></div>
+              </div>
+            </div>
+            <!-- scroll down -->
+            <div style="position:absolute;right:14px;bottom:96px;width:46px;height:46px;border-radius:50%;background:rgba(25,34,58,0.80);border:1px solid rgba(255,255,255,0.09);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(5,9,18,0.40);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D6DFF2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+              <div style="position:absolute;top:-4px;right:-2px;min-width:19px;height:19px;border-radius:10px;background:linear-gradient(135deg,#2362FD,#00B8D9);color:#FFFFFF;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;box-sizing:border-box;">2</div>
+            </div>
+            <!-- input bar -->
+            <div style="padding:8px 12px 16px;display:flex;align-items:center;gap:10px;background:#0E1424;">
+              <div style="flex:1;height:52px;border-radius:26px;background:#19223A;display:flex;align-items:center;gap:11px;padding:0 16px;box-sizing:border-box;">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#8FA0BF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                <span style="flex:1;font-size:15.5px;font-weight:500;color:#48577A;">Сообщение</span>
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#8FA0BF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8.5 14s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8"></path><circle cx="9" cy="9.5" r="0.6" fill="#8FA0BF"></circle><circle cx="15" cy="9.5" r="0.6" fill="#8FA0BF"></circle></svg>
+              </div>
+              <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 22px rgba(35,98,253,0.40);flex-shrink:0;">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);z-index:40;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DIRECTION 2 · FROST ============ -->
+  <section style="margin-top:72px;">
+    <div style="display:flex;align-items:baseline;gap:14px;">
+      <span style="font-size:14px;font-weight:800;color:#2362FD;">02</span>
+      <h2 style="margin:0;font-size:24px;font-weight:800;color:#171C26;letter-spacing:-0.3px;">Frost — стекло и свечения</h2>
+    </div>
+    <p style="margin:6px 0 26px 30px;font-size:14px;line-height:1.5;color:#5B6575;max-width:780px;">Фон «дышит» мягкими брендовыми свечениями, а вся навигация — парящие стеклянные панели с blur: шапка, поиск, поле ввода, входящие пузыри. Самый воздушный и «дорогой» вариант; blur — штатный Modifier в Compose.</p>
+
+    <div style="display:flex;gap:36px;align-items:flex-start;flex-wrap:wrap;margin-left:30px;">
+
+      <!-- ===== 2.1 LOGIN ===== -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:12px;font-weight:800;color:#8A93A3;letter-spacing:0.6px;text-transform:uppercase;">2.1 · Логин</div>
+        <div data-screen-label="02 Frost — Логин" style="position:relative;width:412px;height:892px;border-radius:40px;border:10px solid #05070D;box-shadow:0 24px 60px rgba(10,16,32,0.35);overflow:hidden;flex-shrink:0;background:#0A0F1E;">
+          <div style="position:absolute;top:-130px;left:-110px;width:400px;height:400px;border-radius:50%;background:#2362FD;opacity:0.45;filter:blur(95px);"></div>
+          <div style="position:absolute;bottom:-150px;right:-120px;width:430px;height:430px;border-radius:50%;background:#00B8D9;opacity:0.32;filter:blur(105px);"></div>
+          <div style="position:absolute;top:340px;right:-90px;width:240px;height:240px;border-radius:50%;background:#8B5CF6;opacity:0.20;filter:blur(85px);"></div>
+          <!-- status bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;">
+            <div style="font-size:14px;font-weight:700;color:#FFFFFF;">9:30</div>
+            <div style="display:flex;align-items:center;gap:5px;opacity:0.95;">
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 13.3L.67 5.97a10.37 10.37 0 0114.66 0L8 13.3z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M14.67 14.67V1.33L1.33 14.67h13.34z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="3.75" y="2" width="8.5" height="13" rx="1.5" fill="#FFFFFF"></rect><rect x="5.5" y="0.9" width="5" height="2" rx="0.5" fill="#FFFFFF"></rect></svg>
+            </div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:#05070D;z-index:41;"></div>
+          <!-- content -->
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 20px;box-sizing:border-box;">
+            <div style="width:88px;height:88px;border-radius:30px;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;box-shadow:0 18px 44px rgba(35,98,253,0.45);">
+              <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v4.5c0 2 1.6 3.5 4 3.5s4-1.5 4-3.5V3"></path><path d="M12 3v8"></path><path d="M12 11v10"></path></svg>
+            </div>
+            <div style="margin-top:20px;font-size:44px;font-weight:800;color:#FFFFFF;letter-spacing:-1px;line-height:1;">Fork</div>
+            <div style="margin-top:10px;font-size:15px;font-weight:600;color:rgba(214,226,248,0.70);">Мессенджер для своих</div>
+            <div style="margin-top:34px;width:100%;border-radius:32px;background:rgba(22,30,56,0.55);border:1px solid rgba(255,255,255,0.10);backdrop-filter:blur(22px);padding:24px;box-sizing:border-box;box-shadow:0 24px 60px rgba(5,9,18,0.45);">
+              <div style="font-size:20px;font-weight:800;color:#F1F5FF;letter-spacing:-0.3px;">Ваш телефон</div>
+              <div style="margin-top:5px;font-size:13.5px;line-height:1.5;color:#8FA0BF;">Войдём по номеру вашего аккаунта Telegram</div>
+              <div style="margin-top:18px;height:54px;border-radius:18px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.10);display:flex;align-items:center;justify-content:space-between;padding:0 16px;box-sizing:border-box;">
+                <span style="font-size:15.5px;font-weight:600;color:#F1F5FF;">Россия</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E7FA3" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+              </div>
+              <div style="margin-top:10px;height:54px;border-radius:18px;background:rgba(255,255,255,0.06);border:1px solid rgba(0,184,217,0.65);display:flex;align-items:center;gap:11px;padding:0 16px;box-sizing:border-box;box-shadow:0 0 0 4px rgba(0,184,217,0.12);">
+                <span style="font-size:15.5px;font-weight:700;color:#F1F5FF;">+7</span>
+                <div style="width:1px;height:22px;background:rgba(255,255,255,0.14);"></div>
+                <span style="font-size:15.5px;font-weight:600;color:#F1F5FF;">912 4</span>
+                <div style="width:2px;height:20px;border-radius:1px;background:#00B8D9;margin-left:-7px;"></div>
+                <span style="font-size:15.5px;font-weight:500;color:#48577A;margin-left:-7px;">00-00-00</span>
+              </div>
+              <div style="margin-top:18px;height:54px;border-radius:27px;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 30px rgba(35,98,253,0.40);">
+                <span style="font-size:15.5px;font-weight:800;color:#FFFFFF;letter-spacing:0.2px;">Продолжить</span>
+              </div>
+            </div>
+            <div style="margin-top:18px;font-size:12px;color:#48577A;">Продолжая, вы принимаете Условия использования</div>
+          </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);z-index:40;"></div>
+        </div>
+      </div>
+
+      <!-- ===== 2.2 CHAT LIST ===== -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:12px;font-weight:800;color:#8A93A3;letter-spacing:0.6px;text-transform:uppercase;">2.2 · Список чатов</div>
+        <div data-screen-label="02 Frost — Список чатов" style="position:relative;width:412px;height:892px;border-radius:40px;border:10px solid #05070D;box-shadow:0 24px 60px rgba(10,16,32,0.35);overflow:hidden;flex-shrink:0;background:#0A0F1E;">
+          <div style="position:absolute;top:-140px;left:-120px;width:380px;height:380px;border-radius:50%;background:#2362FD;opacity:0.30;filter:blur(95px);"></div>
+          <div style="position:absolute;bottom:-160px;right:-130px;width:400px;height:400px;border-radius:50%;background:#00B8D9;opacity:0.20;filter:blur(105px);"></div>
+          <!-- status bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;">
+            <div style="font-size:14px;font-weight:700;color:#FFFFFF;">9:30</div>
+            <div style="display:flex;align-items:center;gap:5px;opacity:0.95;">
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 13.3L.67 5.97a10.37 10.37 0 0114.66 0L8 13.3z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M14.67 14.67V1.33L1.33 14.67h13.34z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="3.75" y="2" width="8.5" height="13" rx="1.5" fill="#FFFFFF"></rect><rect x="5.5" y="0.9" width="5" height="2" rx="0.5" fill="#FFFFFF"></rect></svg>
+            </div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:#05070D;z-index:41;"></div>
+          <!-- glass header -->
+          <div style="position:relative;margin:54px 12px 0;border-radius:28px;background:rgba(22,30,56,0.55);border:1px solid rgba(255,255,255,0.10);backdrop-filter:blur(22px);padding:16px;box-shadow:0 16px 40px rgba(5,9,18,0.35);">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="display:flex;align-items:center;gap:9px;">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#3D8DF7" stroke-width="2" stroke-linecap="round"><path d="M8 3v4.5c0 2 1.6 3.5 4 3.5s4-1.5 4-3.5V3"></path><path d="M12 3v8"></path><path d="M12 11v10"></path></svg>
+                <span style="font-size:22px;font-weight:800;color:#F1F5FF;letter-spacing:-0.4px;">Чаты</span>
+              </div>
+              <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#FFB547,#FF7A3D);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#FFFFFF;">Я</div>
+            </div>
+            <div style="margin-top:13px;height:44px;border-radius:22px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:10px;padding:0 15px;box-sizing:border-box;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#8FA0BF" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+              <span style="font-size:14.5px;font-weight:500;color:#5E6C89;">Поиск</span>
+            </div>
+          </div>
+          <!-- update banner -->
+          <div style="margin:12px 12px 2px;border-radius:22px;background:rgba(35,98,253,0.13);border:1px solid rgba(61,141,247,0.25);backdrop-filter:blur(16px);padding:11px 14px;display:flex;align-items:center;gap:12px;">
+            <div style="width:36px;height:36px;border-radius:13px;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 19h16"></path></svg>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13.5px;font-weight:700;color:#F1F5FF;">Fork 2.4 доступен</div>
+              <div style="font-size:12px;color:#8FA0BF;margin-top:1px;">Нажмите, чтобы установить</div>
+            </div>
+            <div style="font-size:13px;font-weight:800;color:#2BCDEA;">Установить</div>
+          </div>
+          <!-- chats -->
+          <div style="display:flex;flex-direction:column;padding:6px 2px;">
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">С</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Семья</span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">21:14</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;">
+                  <span style="font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span style="color:#B9C5DC;font-weight:600;">Папа:</span> Едем в 19:00, не опаздывайте 🚗</span>
+                  <span style="min-width:22px;height:22px;border-radius:11px;background:linear-gradient(135deg,#2362FD,#00B8D9);color:#FFFFFF;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 7px;box-sizing:border-box;flex-shrink:0;box-shadow:0 4px 12px rgba(35,98,253,0.45);">3</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);padding:2px;box-sizing:border-box;flex-shrink:0;box-shadow:0 0 16px rgba(0,184,217,0.35);">
+                <div style="width:100%;height:100%;border-radius:50%;background:#0A0F1E;padding:2px;box-sizing:border-box;">
+                  <div style="width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,#8B5CF6,#4C7DFF);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700;color:#FFFFFF;">А</div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Аня</span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">20:58</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;">
+                  <span style="font-size:14px;color:#2BCDEA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2BCDEA" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>Голосовое сообщение · 0:42</span>
+                  <span style="min-width:22px;height:22px;border-radius:11px;background:linear-gradient(135deg,#2362FD,#00B8D9);color:#FFFFFF;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 7px;box-sizing:border-box;flex-shrink:0;box-shadow:0 4px 12px rgba(35,98,253,0.45);">1</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#FF6F91,#FF9F6E);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">М</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Мама</span>
+                  <span style="display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:#5E6C89;"><svg width="16" height="10" viewBox="0 0 18 10" fill="none" stroke="#2BCDEA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4 8.5L9 2"></path><path d="M8 5.5L11 8.5L16 2"></path></svg>19:32</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Купил молоко и хлеб, буду через час</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#00C885,#00B8D9);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">Д</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Дима</span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">18:05</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🦊 Стикер</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#FFB547,#FF7A3D);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">К</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="display:flex;align-items:center;gap:6px;font-size:16px;font-weight:700;color:#F1F5FF;">Книжный клуб<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5E6C89" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.7 21a2 2 0 0 1-3.4 0"></path><path d="M18.6 13c-.4-1.5-.6-3.2-.6-5a6 6 0 0 0-9.3-5"></path><path d="M6.3 6.3C6.1 6.8 6 7.4 6 8c0 7-3 9-3 9h14"></path><path d="M2 2l20 20"></path></svg></span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">15:47</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span style="color:#B9C5DC;font-weight:600;">Оля:</span> Скину статью завтра утром</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#4C7DFF,#22D3EE);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">П</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Папа</span>
+                  <span style="display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:600;color:#5E6C89;"><svg width="16" height="10" viewBox="0 0 18 10" fill="none" stroke="#5E6C89" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5.5L11 8.5L16 2"></path></svg>Вт</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Ок, понял. Завтра созвонимся</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;">
+              <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#F45B9A,#8B5CF6);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#FFFFFF;flex-shrink:0;">Л</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:700;color:#F1F5FF;">Лена</span>
+                  <span style="font-size:12.5px;font-weight:600;color:#5E6C89;">Пн</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#8FA0BF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📷 Фото</div>
+              </div>
+            </div>
+          </div>
+          <!-- FAB -->
+          <div style="position:absolute;right:18px;bottom:28px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);border:1px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;box-shadow:0 14px 36px rgba(35,98,253,0.55);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+          </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);z-index:40;"></div>
+        </div>
+      </div>
+
+      <!-- ===== 2.3 CHAT ===== -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:12px;font-weight:800;color:#8A93A3;letter-spacing:0.6px;text-transform:uppercase;">2.3 · Чат</div>
+        <div data-screen-label="02 Frost — Чат" style="position:relative;width:412px;height:892px;border-radius:40px;border:10px solid #05070D;box-shadow:0 24px 60px rgba(10,16,32,0.35);overflow:hidden;flex-shrink:0;background:#0A0F1E;">
+          <div style="position:absolute;top:-120px;right:-110px;width:360px;height:360px;border-radius:50%;background:#2362FD;opacity:0.26;filter:blur(95px);"></div>
+          <div style="position:absolute;bottom:120px;left:-140px;width:360px;height:360px;border-radius:50%;background:#00B8D9;opacity:0.16;filter:blur(100px);"></div>
+          <!-- status bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;">
+            <div style="font-size:14px;font-weight:700;color:#FFFFFF;">9:30</div>
+            <div style="display:flex;align-items:center;gap:5px;opacity:0.95;">
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 13.3L.67 5.97a10.37 10.37 0 0114.66 0L8 13.3z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M14.67 14.67V1.33L1.33 14.67h13.34z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="3.75" y="2" width="8.5" height="13" rx="1.5" fill="#FFFFFF"></rect><rect x="5.5" y="0.9" width="5" height="2" rx="0.5" fill="#FFFFFF"></rect></svg>
+            </div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:#05070D;z-index:41;"></div>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;">
+            <!-- glass chat header -->
+            <div style="margin:52px 10px 0;border-radius:24px;background:rgba(22,30,56,0.55);border:1px solid rgba(255,255,255,0.10);backdrop-filter:blur(22px);padding:9px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 12px 30px rgba(5,9,18,0.35);">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#B9C5DC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"></path></svg>
+              <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);padding:2px;box-sizing:border-box;box-shadow:0 0 14px rgba(0,184,217,0.35);">
+                <div style="width:100%;height:100%;border-radius:50%;background:#0E1528;padding:2px;box-sizing:border-box;">
+                  <div style="width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,#8B5CF6,#4C7DFF);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#FFFFFF;">А</div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:16.5px;font-weight:800;color:#F1F5FF;letter-spacing:-0.2px;">Аня</div>
+                <div style="font-size:12.5px;font-weight:600;color:#2BCDEA;">в сети</div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#8FA0BF" style="margin-right:4px;"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+            </div>
+            <!-- messages -->
+            <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding:12px 14px 8px;">
+              <div style="align-self:center;padding:5px 14px;border-radius:14px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.09);backdrop-filter:blur(10px);font-size:12.5px;font-weight:700;color:#AEBBD6;">Сегодня</div>
+              <div style="align-self:flex-start;max-width:78%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.07);backdrop-filter:blur(14px);border-radius:20px 20px 20px 6px;padding:10px 14px;">
+                <div style="font-size:15.5px;line-height:1.45;color:#EAF0FB;">Привет! Смотри, что нашла 😍</div>
+                <div style="display:flex;justify-content:flex-end;margin-top:2px;"><span style="font-size:11px;font-weight:600;color:#6E7FA3;">10:12</span></div>
+              </div>
+              <div style="align-self:flex-start;max-width:78%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.07);backdrop-filter:blur(14px);border-radius:20px;padding:4px;position:relative;">
+                <div style="width:252px;height:172px;border-radius:17px;background:linear-gradient(160deg,#222F4E,#131D36);display:flex;align-items:center;justify-content:center;">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.30)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="M5 17l5-5 4 4 3-3 3 3"></path></svg>
+                </div>
+                <div style="position:absolute;right:12px;bottom:12px;padding:2px 8px;border-radius:10px;background:rgba(5,9,18,0.55);backdrop-filter:blur(6px);font-size:11px;font-weight:600;color:rgba(255,255,255,0.9);">10:12</div>
+              </div>
+              <div style="align-self:flex-end;max-width:78%;background:linear-gradient(135deg,#2362FD,#00B8D9);border-radius:20px 20px 6px 20px;padding:10px 14px;box-shadow:0 8px 24px rgba(35,98,253,0.35);">
+                <div style="font-size:15.5px;line-height:1.45;color:#FFFFFF;">Ого! Это где? 😍</div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:2px;"><span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.75);">10:14</span><svg width="15" height="9" viewBox="0 0 18 10" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4 8.5L9 2"></path><path d="M8 5.5L11 8.5L16 2"></path></svg></div>
+              </div>
+              <div style="align-self:flex-start;max-width:82%;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.07);backdrop-filter:blur(14px);border-radius:20px 20px 20px 6px;padding:10px 12px;">
+                <div style="display:flex;align-items:center;gap:11px;">
+                  <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 14px rgba(35,98,253,0.40);">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="#FFFFFF"><path d="M8 5v14l11-7z"></path></svg>
+                  </div>
+                  <div>
+                    <div style="display:flex;align-items:flex-end;gap:3px;height:26px;">
+                      <div style="width:3px;height:8px;border-radius:2px;background:#2F6BFD;"></div>
+                      <div style="width:3px;height:14px;border-radius:2px;background:#2F6BFD;"></div>
+                      <div style="width:3px;height:20px;border-radius:2px;background:#2F6BFD;"></div>
+                      <div style="width:3px;height:25px;border-radius:2px;background:#1A82EE;"></div>
+                      <div style="width:3px;height:17px;border-radius:2px;background:#1A82EE;"></div>
+                      <div style="width:3px;height:11px;border-radius:2px;background:#1A82EE;"></div>
+                      <div style="width:3px;height:21px;border-radius:2px;background:#0C9FE0;"></div>
+                      <div style="width:3px;height:26px;border-radius:2px;background:#0C9FE0;"></div>
+                      <div style="width:3px;height:15px;border-radius:2px;background:#0C9FE0;"></div>
+                      <div style="width:3px;height:9px;border-radius:2px;background:#00B8D9;"></div>
+                      <div style="width:3px;height:13px;border-radius:2px;background:#00B8D9;"></div>
+                      <div style="width:3px;height:19px;border-radius:2px;background:#00B8D9;"></div>
+                      <div style="width:3px;height:25px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                      <div style="width:3px;height:17px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                      <div style="width:3px;height:11px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                      <div style="width:3px;height:15px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                      <div style="width:3px;height:21px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                      <div style="width:3px;height:13px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                      <div style="width:3px;height:9px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                      <div style="width:3px;height:7px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                      <div style="width:3px;height:11px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                      <div style="width:3px;height:6px;border-radius:2px;background:rgba(255,255,255,0.25);"></div>
+                    </div>
+                    <div style="margin-top:4px;font-size:12px;font-weight:600;color:#8FA0BF;">0:26 / 0:42</div>
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:2px;"><span style="font-size:11px;font-weight:600;color:#6E7FA3;">10:16</span></div>
+              </div>
+              <div style="align-self:flex-end;max-width:78%;background:linear-gradient(135deg,#2362FD,#00B8D9);border-radius:20px 20px 6px 20px;padding:8px 10px 10px;box-shadow:0 8px 24px rgba(35,98,253,0.35);">
+                <div style="background:rgba(255,255,255,0.18);border-left:3px solid #FFFFFF;border-radius:10px;padding:6px 10px;">
+                  <div style="font-size:12.5px;font-weight:800;color:#FFFFFF;">Аня</div>
+                  <div style="font-size:12.5px;color:rgba(255,255,255,0.85);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Голосовое сообщение</div>
+                </div>
+                <div style="font-size:15.5px;line-height:1.45;color:#FFFFFF;margin-top:6px;padding:0 4px;">Поехали туда на выходных? 🚗</div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:2px;padding:0 4px;"><span style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.75);">10:18</span><svg width="15" height="9" viewBox="0 0 18 10" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4 8.5L9 2"></path><path d="M8 5.5L11 8.5L16 2"></path></svg></div>
+              </div>
+              <div style="align-self:flex-start;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.07);backdrop-filter:blur(14px);border-radius:20px 20px 20px 6px;padding:14px 16px;display:flex;align-items:center;gap:5px;">
+                <div style="width:7px;height:7px;border-radius:50%;background:#8FA0BF;"></div>
+                <div style="width:7px;height:7px;border-radius:50%;background:rgba(143,160,191,0.55);"></div>
+                <div style="width:7px;height:7px;border-radius:50%;background:rgba(143,160,191,0.30);"></div>
+              </div>
+            </div>
+            <!-- scroll down -->
+            <div style="position:absolute;right:16px;bottom:100px;width:46px;height:46px;border-radius:50%;background:rgba(22,30,56,0.65);border:1px solid rgba(255,255,255,0.12);backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(5,9,18,0.40);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#D6DFF2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+              <div style="position:absolute;top:-4px;right:-2px;min-width:19px;height:19px;border-radius:10px;background:linear-gradient(135deg,#2362FD,#00B8D9);color:#FFFFFF;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;box-sizing:border-box;">2</div>
+            </div>
+            <!-- glass input bar -->
+            <div style="padding:0 10px 14px;display:flex;align-items:center;gap:10px;">
+              <div style="flex:1;height:52px;border-radius:26px;background:rgba(22,30,56,0.60);border:1px solid rgba(255,255,255,0.10);backdrop-filter:blur(22px);display:flex;align-items:center;gap:11px;padding:0 16px;box-sizing:border-box;box-shadow:0 12px 30px rgba(5,9,18,0.35);">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#8FA0BF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                <span style="flex:1;font-size:15.5px;font-weight:500;color:#5E6C89;">Сообщение</span>
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#8FA0BF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8.5 14s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8"></path><circle cx="9" cy="9.5" r="0.6" fill="#8FA0BF"></circle><circle cx="15" cy="9.5" r="0.6" fill="#8FA0BF"></circle></svg>
+              </div>
+              <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);border:1px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;box-shadow:0 12px 28px rgba(35,98,253,0.50);flex-shrink:0;">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);z-index:40;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DIRECTION 3 · NEON INK ============ -->
+  <section style="margin-top:72px;">
+    <div style="display:flex;align-items:baseline;gap:14px;">
+      <span style="font-size:14px;font-weight:800;color:#2362FD;">03</span>
+      <h2 style="margin:0;font-size:24px;font-weight:800;color:#171C26;letter-spacing:-0.3px;">Neon Ink — чернила и неон</h2>
+    </div>
+    <p style="margin:6px 0 26px 30px;font-size:14px;line-height:1.5;color:#5B6575;max-width:780px;">Почти чёрная база (родная сестра AMOLED-режима), типографика крупнее и жирнее, а градиент работает как неон: кольца аватаров, контур поля ввода, свечение под пузырями и кнопками. Самый смелый и «молодёжный» вариант.</p>
+
+    <div style="display:flex;gap:36px;align-items:flex-start;flex-wrap:wrap;margin-left:30px;">
+
+      <!-- ===== 3.1 LOGIN ===== -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:12px;font-weight:800;color:#8A93A3;letter-spacing:0.6px;text-transform:uppercase;">3.1 · Логин</div>
+        <div data-screen-label="03 Neon Ink — Логин" style="position:relative;width:412px;height:892px;border-radius:40px;border:10px solid #05070D;box-shadow:0 24px 60px rgba(10,16,32,0.35);overflow:hidden;flex-shrink:0;background:#070B14;">
+          <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:480px;height:300px;border-radius:50%;background:#2362FD;opacity:0.22;filter:blur(110px);"></div>
+          <div style="position:absolute;bottom:-120px;left:50%;transform:translateX(-50%);width:420px;height:260px;border-radius:50%;background:#00B8D9;opacity:0.14;filter:blur(100px);"></div>
+          <!-- status bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;">
+            <div style="font-size:14px;font-weight:700;color:#FFFFFF;">9:30</div>
+            <div style="display:flex;align-items:center;gap:5px;opacity:0.95;">
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 13.3L.67 5.97a10.37 10.37 0 0114.66 0L8 13.3z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M14.67 14.67V1.33L1.33 14.67h13.34z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="3.75" y="2" width="8.5" height="13" rx="1.5" fill="#FFFFFF"></rect><rect x="5.5" y="0.9" width="5" height="2" rx="0.5" fill="#FFFFFF"></rect></svg>
+            </div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:#05070D;z-index:41;"></div>
+          <!-- content -->
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;padding:0 26px;box-sizing:border-box;">
+            <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+              <div style="width:64px;height:64px;border-radius:22px;background:linear-gradient(135deg,#2362FD,#00B8D9);padding:1.5px;box-sizing:border-box;box-shadow:0 0 36px rgba(35,98,253,0.50);">
+                <div style="width:100%;height:100%;border-radius:20.5px;background:#0A101F;display:flex;align-items:center;justify-content:center;">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2BCDEA" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v4.5c0 2 1.6 3.5 4 3.5s4-1.5 4-3.5V3"></path><path d="M12 3v8"></path><path d="M12 11v10"></path></svg>
+                </div>
+              </div>
+              <div style="margin-top:26px;font-size:72px;font-weight:800;letter-spacing:-2.5px;line-height:1;background:linear-gradient(110deg,#3D8DF7,#00B8D9 70%);-webkit-background-clip:text;background-clip:text;color:transparent;">Fork</div>
+              <div style="margin-top:14px;font-size:17px;font-weight:600;line-height:1.45;color:#9DACC9;">Мессенджер для своих.<br>Быстрый, тихий, красивый.</div>
+            </div>
+            <div style="padding-bottom:44px;">
+              <div style="height:56px;border-radius:20px;background:#0E1526;border:1px solid #1D2944;display:flex;align-items:center;justify-content:space-between;padding:0 18px;box-sizing:border-box;">
+                <span style="font-size:16px;font-weight:600;color:#EEF3FF;">Россия</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5E6C89" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"></path></svg>
+              </div>
+              <div style="margin-top:12px;border-radius:20px;background:linear-gradient(135deg,#2362FD,#00B8D9);padding:1.5px;box-shadow:0 0 26px rgba(0,184,217,0.25);">
+                <div style="height:53px;border-radius:18.5px;background:#0A101F;display:flex;align-items:center;gap:12px;padding:0 18px;box-sizing:border-box;">
+                  <span style="font-size:16px;font-weight:700;color:#EEF3FF;">+7</span>
+                  <div style="width:1px;height:24px;background:#1D2944;"></div>
+                  <span style="font-size:16px;font-weight:600;color:#EEF3FF;">912 4</span>
+                  <div style="width:2px;height:22px;border-radius:1px;background:#00B8D9;margin-left:-8px;"></div>
+                  <span style="font-size:16px;font-weight:500;color:#3C4A6B;margin-left:-8px;">00-00-00</span>
+                </div>
+              </div>
+              <div style="margin-top:18px;height:58px;border-radius:29px;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(35,98,253,0.45), 0 12px 28px rgba(35,98,253,0.30);">
+                <span style="font-size:16px;font-weight:800;color:#FFFFFF;letter-spacing:0.3px;">Продолжить</span>
+              </div>
+              <div style="margin-top:16px;text-align:center;font-size:12px;color:#3C4A6B;">Продолжая, вы принимаете Условия использования</div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);z-index:40;"></div>
+        </div>
+      </div>
+
+      <!-- ===== 3.2 CHAT LIST ===== -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:12px;font-weight:800;color:#8A93A3;letter-spacing:0.6px;text-transform:uppercase;">3.2 · Список чатов</div>
+        <div data-screen-label="03 Neon Ink — Список чатов" style="position:relative;width:412px;height:892px;border-radius:40px;border:10px solid #05070D;box-shadow:0 24px 60px rgba(10,16,32,0.35);overflow:hidden;flex-shrink:0;background:#070B14;">
+          <!-- status bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;">
+            <div style="font-size:14px;font-weight:700;color:#FFFFFF;">9:30</div>
+            <div style="display:flex;align-items:center;gap:5px;opacity:0.95;">
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 13.3L.67 5.97a10.37 10.37 0 0114.66 0L8 13.3z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M14.67 14.67V1.33L1.33 14.67h13.34z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="3.75" y="2" width="8.5" height="13" rx="1.5" fill="#FFFFFF"></rect><rect x="5.5" y="0.9" width="5" height="2" rx="0.5" fill="#FFFFFF"></rect></svg>
+            </div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:#05070D;z-index:41;"></div>
+          <!-- header -->
+          <div style="padding:60px 20px 0;">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+              <div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2BCDEA" stroke-width="2.2" stroke-linecap="round"><path d="M8 3v4.5c0 2 1.6 3.5 4 3.5s4-1.5 4-3.5V3"></path><path d="M12 3v8"></path><path d="M12 11v10"></path></svg>
+                  <span style="font-size:12px;font-weight:800;letter-spacing:2.5px;background:linear-gradient(110deg,#3D8DF7,#00B8D9);-webkit-background-clip:text;background-clip:text;color:transparent;">FORK</span>
+                </div>
+                <div style="margin-top:4px;font-size:36px;font-weight:800;color:#EEF3FF;letter-spacing:-1px;line-height:1;">Чаты</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:42px;height:42px;border-radius:50%;background:#0E1526;border:1px solid #1D2944;display:flex;align-items:center;justify-content:center;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9DACC9" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path></svg>
+                </div>
+                <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#FFB547,#FF7A3D);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#FFFFFF;">Я</div>
+              </div>
+            </div>
+            <!-- tabs -->
+            <div style="margin-top:18px;display:flex;gap:22px;border-bottom:1px solid #131C30;">
+              <div style="padding-bottom:10px;position:relative;">
+                <span style="font-size:14.5px;font-weight:800;color:#EEF3FF;">Все</span>
+                <div style="position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:2px;background:linear-gradient(90deg,#2362FD,#00B8D9);box-shadow:0 0 12px rgba(0,184,217,0.6);"></div>
+              </div>
+              <div style="padding-bottom:10px;"><span style="font-size:14.5px;font-weight:700;color:#5E6C89;">Семья</span></div>
+              <div style="padding-bottom:10px;display:flex;align-items:center;gap:6px;"><span style="font-size:14.5px;font-weight:700;color:#5E6C89;">Личное</span><span style="min-width:18px;height:18px;border-radius:9px;background:#00B8D9;color:#04121C;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;box-sizing:border-box;">4</span></div>
+            </div>
+          </div>
+          <!-- update row -->
+          <div style="margin:12px 20px 2px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:16px;border:1px dashed #234064;background:rgba(35,98,253,0.06);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2BCDEA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M7 10l5 5 5-5"></path><path d="M4 19h16"></path></svg>
+            <span style="flex:1;font-size:13.5px;font-weight:700;color:#9DACC9;">Fork 2.4 доступен</span>
+            <span style="font-size:13px;font-weight:800;color:#2BCDEA;">Установить</span>
+          </div>
+          <!-- chats -->
+          <div style="display:flex;flex-direction:column;padding:4px 0;">
+            <div style="display:flex;align-items:center;gap:14px;padding:11px 20px;border-bottom:1px solid #0E1526;">
+              <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#FFFFFF;flex-shrink:0;">С</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:800;color:#EEF3FF;">Семья</span>
+                  <span style="font-size:12px;font-weight:700;color:#3C4A6B;">21:14</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;">
+                  <span style="font-size:14px;color:#7C8AA5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span style="color:#AEBBD6;font-weight:700;">Папа:</span> Едем в 19:00, не опаздывайте 🚗</span>
+                  <span style="min-width:21px;height:21px;border-radius:11px;background:#00B8D9;color:#04121C;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 6px;box-sizing:border-box;flex-shrink:0;box-shadow:0 0 14px rgba(0,184,217,0.45);">3</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:11px 20px;border-bottom:1px solid #0E1526;">
+              <div style="width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);padding:2px;box-sizing:border-box;flex-shrink:0;box-shadow:0 0 18px rgba(0,184,217,0.40);">
+                <div style="width:100%;height:100%;border-radius:50%;background:#070B14;padding:2px;box-sizing:border-box;">
+                  <div style="width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,#8B5CF6,#4C7DFF);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#FFFFFF;">А</div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:800;color:#EEF3FF;">Аня</span>
+                  <span style="font-size:12px;font-weight:700;color:#3C4A6B;">20:58</span>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:3px;">
+                  <span style="font-size:14px;color:#2BCDEA;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2BCDEA" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>Голосовое сообщение · 0:42</span>
+                  <span style="min-width:21px;height:21px;border-radius:11px;background:#00B8D9;color:#04121C;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 6px;box-sizing:border-box;flex-shrink:0;box-shadow:0 0 14px rgba(0,184,217,0.45);">1</span>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:11px 20px;border-bottom:1px solid #0E1526;">
+              <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#FF6F91,#FF9F6E);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#FFFFFF;flex-shrink:0;">М</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:800;color:#EEF3FF;">Мама</span>
+                  <span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#3C4A6B;"><svg width="16" height="10" viewBox="0 0 18 10" fill="none" stroke="#2BCDEA" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4 8.5L9 2"></path><path d="M8 5.5L11 8.5L16 2"></path></svg>19:32</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#7C8AA5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Купил молоко и хлеб, буду через час</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:11px 20px;border-bottom:1px solid #0E1526;">
+              <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#00C885,#00B8D9);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#FFFFFF;flex-shrink:0;">Д</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:800;color:#EEF3FF;">Дима</span>
+                  <span style="font-size:12px;font-weight:700;color:#3C4A6B;">18:05</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#7C8AA5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🦊 Стикер</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:11px 20px;border-bottom:1px solid #0E1526;">
+              <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#FFB547,#FF7A3D);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#FFFFFF;flex-shrink:0;">К</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="display:flex;align-items:center;gap:6px;font-size:16px;font-weight:800;color:#EEF3FF;">Книжный клуб<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3C4A6B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.7 21a2 2 0 0 1-3.4 0"></path><path d="M18.6 13c-.4-1.5-.6-3.2-.6-5a6 6 0 0 0-9.3-5"></path><path d="M6.3 6.3C6.1 6.8 6 7.4 6 8c0 7-3 9-3 9h14"></path><path d="M2 2l20 20"></path></svg></span>
+                  <span style="font-size:12px;font-weight:700;color:#3C4A6B;">15:47</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#7C8AA5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><span style="color:#AEBBD6;font-weight:700;">Оля:</span> Скину статью завтра утром</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:11px 20px;border-bottom:1px solid #0E1526;">
+              <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#4C7DFF,#22D3EE);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#FFFFFF;flex-shrink:0;">П</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:800;color:#EEF3FF;">Папа</span>
+                  <span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#3C4A6B;"><svg width="16" height="10" viewBox="0 0 18 10" fill="none" stroke="#5E6C89" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5.5L11 8.5L16 2"></path></svg>Вт</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#7C8AA5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Ок, понял. Завтра созвонимся</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px;padding:11px 20px;">
+              <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#F45B9A,#8B5CF6);display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:800;color:#FFFFFF;flex-shrink:0;">Л</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                  <span style="font-size:16px;font-weight:800;color:#EEF3FF;">Лена</span>
+                  <span style="font-size:12px;font-weight:700;color:#3C4A6B;">Пн</span>
+                </div>
+                <div style="margin-top:3px;font-size:14px;color:#7C8AA5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📷 Фото</div>
+              </div>
+            </div>
+          </div>
+          <!-- FAB -->
+          <div style="position:absolute;right:20px;bottom:28px;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;box-shadow:0 0 36px rgba(35,98,253,0.55), 0 12px 26px rgba(5,9,18,0.50);">
+            <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+          </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);z-index:40;"></div>
+        </div>
+      </div>
+
+      <!-- ===== 3.3 CHAT ===== -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:12px;font-weight:800;color:#8A93A3;letter-spacing:0.6px;text-transform:uppercase;">3.3 · Чат</div>
+        <div data-screen-label="03 Neon Ink — Чат" style="position:relative;width:412px;height:892px;border-radius:40px;border:10px solid #05070D;box-shadow:0 24px 60px rgba(10,16,32,0.35);overflow:hidden;flex-shrink:0;background:#070B14;">
+          <!-- status bar -->
+          <div style="position:absolute;top:0;left:0;right:0;height:44px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:0 26px;box-sizing:border-box;">
+            <div style="font-size:14px;font-weight:700;color:#FFFFFF;">9:30</div>
+            <div style="display:flex;align-items:center;gap:5px;opacity:0.95;">
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M8 13.3L.67 5.97a10.37 10.37 0 0114.66 0L8 13.3z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><path d="M14.67 14.67V1.33L1.33 14.67h13.34z" fill="#FFFFFF"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 16 16"><rect x="3.75" y="2" width="8.5" height="13" rx="1.5" fill="#FFFFFF"></rect><rect x="5.5" y="0.9" width="5" height="2" rx="0.5" fill="#FFFFFF"></rect></svg>
+            </div>
+          </div>
+          <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);width:12px;height:12px;border-radius:50%;background:#05070D;z-index:41;"></div>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;">
+            <!-- chat header -->
+            <div style="padding:50px 14px 12px;display:flex;align-items:center;gap:11px;border-bottom:1px solid #0E1526;background:rgba(7,11,20,0.85);">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9DACC9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:2px;"><path d="M15 18l-6-6 6-6"></path></svg>
+              <div style="width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);padding:2px;box-sizing:border-box;box-shadow:0 0 16px rgba(0,184,217,0.40);">
+                <div style="width:100%;height:100%;border-radius:50%;background:#070B14;padding:2px;box-sizing:border-box;">
+                  <div style="width:100%;height:100%;border-radius:50%;background:linear-gradient(135deg,#8B5CF6,#4C7DFF);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#FFFFFF;">А</div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:17.5px;font-weight:800;color:#EEF3FF;letter-spacing:-0.2px;">Аня</div>
+                <div style="font-size:12.5px;font-weight:700;background:linear-gradient(90deg,#3D8DF7,#00B8D9);-webkit-background-clip:text;background-clip:text;color:transparent;margin-top:1px;">в сети</div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#5E6C89" style="margin-right:8px;"><circle cx="12" cy="5" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="12" cy="19" r="2"></circle></svg>
+            </div>
+            <!-- messages -->
+            <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;gap:10px;padding:12px 14px;">
+              <div style="align-self:center;padding:5px 14px;border-radius:14px;background:rgba(14,21,38,0.85);border:1px solid #1D2944;backdrop-filter:blur(8px);font-size:12.5px;font-weight:700;color:#7C8AA5;">Сегодня</div>
+              <div style="align-self:flex-start;max-width:78%;background:#121B30;border:1px solid #1A2540;border-radius:22px 22px 22px 7px;padding:10px 14px;">
+                <div style="font-size:15.5px;line-height:1.45;color:#E6EDFA;">Привет! Смотри, что нашла 😍</div>
+                <div style="display:flex;justify-content:flex-end;margin-top:2px;"><span style="font-size:11px;font-weight:700;color:#3C4A6B;">10:12</span></div>
+              </div>
+              <div style="align-self:flex-start;max-width:78%;background:#121B30;border:1px solid #1A2540;border-radius:22px;padding:4px;position:relative;">
+                <div style="width:252px;height:172px;border-radius:19px;background:linear-gradient(160deg,#1B2745,#0D1528);display:flex;align-items:center;justify-content:center;">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"></rect><circle cx="9" cy="10" r="1.6"></circle><path d="M5 17l5-5 4 4 3-3 3 3"></path></svg>
+                </div>
+                <div style="position:absolute;right:12px;bottom:12px;padding:2px 8px;border-radius:10px;background:rgba(4,7,14,0.65);backdrop-filter:blur(6px);font-size:11px;font-weight:700;color:rgba(255,255,255,0.9);">10:12</div>
+              </div>
+              <div style="align-self:flex-end;max-width:78%;background:linear-gradient(135deg,#2362FD,#00B8D9);border-radius:22px 22px 7px 22px;padding:10px 14px;box-shadow:0 0 28px rgba(35,98,253,0.35), 0 8px 20px rgba(5,9,18,0.40);">
+                <div style="font-size:15.5px;line-height:1.45;color:#FFFFFF;">Ого! Это где? 😍</div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:2px;"><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.75);">10:14</span><svg width="15" height="9" viewBox="0 0 18 10" fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4 8.5L9 2"></path><path d="M8 5.5L11 8.5L16 2"></path></svg></div>
+              </div>
+              <div style="align-self:flex-start;max-width:82%;background:#121B30;border:1px solid #1A2540;border-radius:22px 22px 22px 7px;padding:10px 12px;">
+                <div style="display:flex;align-items:center;gap:11px;">
+                  <div style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 16px rgba(35,98,253,0.45);">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="#FFFFFF"><path d="M8 5v14l11-7z"></path></svg>
+                  </div>
+                  <div>
+                    <div style="display:flex;align-items:flex-end;gap:3px;height:26px;">
+                      <div style="width:3px;height:8px;border-radius:2px;background:#2F6BFD;"></div>
+                      <div style="width:3px;height:14px;border-radius:2px;background:#2F6BFD;"></div>
+                      <div style="width:3px;height:20px;border-radius:2px;background:#2F6BFD;"></div>
+                      <div style="width:3px;height:25px;border-radius:2px;background:#1A82EE;"></div>
+                      <div style="width:3px;height:17px;border-radius:2px;background:#1A82EE;"></div>
+                      <div style="width:3px;height:11px;border-radius:2px;background:#1A82EE;"></div>
+                      <div style="width:3px;height:21px;border-radius:2px;background:#0C9FE0;"></div>
+                      <div style="width:3px;height:26px;border-radius:2px;background:#0C9FE0;"></div>
+                      <div style="width:3px;height:15px;border-radius:2px;background:#0C9FE0;"></div>
+                      <div style="width:3px;height:9px;border-radius:2px;background:#00B8D9;"></div>
+                      <div style="width:3px;height:13px;border-radius:2px;background:#00B8D9;"></div>
+                      <div style="width:3px;height:19px;border-radius:2px;background:#00B8D9;"></div>
+                      <div style="width:3px;height:25px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                      <div style="width:3px;height:17px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                      <div style="width:3px;height:11px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                      <div style="width:3px;height:15px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                      <div style="width:3px;height:21px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                      <div style="width:3px;height:13px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                      <div style="width:3px;height:9px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                      <div style="width:3px;height:7px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                      <div style="width:3px;height:11px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                      <div style="width:3px;height:6px;border-radius:2px;background:rgba(255,255,255,0.22);"></div>
+                    </div>
+                    <div style="margin-top:4px;font-size:12px;font-weight:700;color:#7C8AA5;">0:26 / 0:42</div>
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;margin-top:2px;"><span style="font-size:11px;font-weight:700;color:#3C4A6B;">10:16</span></div>
+              </div>
+              <div style="align-self:flex-end;max-width:78%;background:linear-gradient(135deg,#2362FD,#00B8D9);border-radius:22px 22px 7px 22px;padding:8px 10px 10px;box-shadow:0 0 28px rgba(35,98,253,0.35), 0 8px 20px rgba(5,9,18,0.40);">
+                <div style="background:rgba(255,255,255,0.18);border-left:3px solid #FFFFFF;border-radius:10px;padding:6px 10px;">
+                  <div style="font-size:12.5px;font-weight:800;color:#FFFFFF;">Аня</div>
+                  <div style="font-size:12.5px;color:rgba(255,255,255,0.85);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Голосовое сообщение</div>
+                </div>
+                <div style="font-size:15.5px;line-height:1.45;color:#FFFFFF;margin-top:6px;padding:0 4px;">Поехали туда на выходных? 🚗</div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:2px;padding:0 4px;"><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.75);">10:18</span><svg width="15" height="9" viewBox="0 0 18 10" fill="none" stroke="rgba(255,255,255,0.92)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4 8.5L9 2"></path><path d="M8 5.5L11 8.5L16 2"></path></svg></div>
+              </div>
+              <div style="align-self:flex-start;background:#121B30;border:1px solid #1A2540;border-radius:22px 22px 22px 7px;padding:14px 16px;display:flex;align-items:center;gap:5px;">
+                <div style="width:7px;height:7px;border-radius:50%;background:#7C8AA5;"></div>
+                <div style="width:7px;height:7px;border-radius:50%;background:rgba(124,138,165,0.55);"></div>
+                <div style="width:7px;height:7px;border-radius:50%;background:rgba(124,138,165,0.30);"></div>
+              </div>
+            </div>
+            <!-- scroll down -->
+            <div style="position:absolute;right:14px;bottom:98px;width:46px;height:46px;border-radius:50%;background:rgba(14,21,38,0.85);border:1px solid #1D2944;backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(4,7,14,0.50);">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#AEBBD6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg>
+              <div style="position:absolute;top:-4px;right:-2px;min-width:19px;height:19px;border-radius:10px;background:#00B8D9;color:#04121C;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 5px;box-sizing:border-box;box-shadow:0 0 12px rgba(0,184,217,0.50);">2</div>
+            </div>
+            <!-- input bar -->
+            <div style="padding:8px 12px 16px;display:flex;align-items:center;gap:10px;background:#070B14;">
+              <div style="flex:1;border-radius:26px;background:linear-gradient(135deg,rgba(35,98,253,0.65),rgba(0,184,217,0.65));padding:1.5px;">
+                <div style="height:49px;border-radius:24.5px;background:#0A101F;display:flex;align-items:center;gap:11px;padding:0 16px;box-sizing:border-box;">
+                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7C8AA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                  <span style="flex:1;font-size:15.5px;font-weight:500;color:#3C4A6B;">Сообщение</span>
+                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#7C8AA5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8.5 14s1.3 1.8 3.5 1.8 3.5-1.8 3.5-1.8"></path><circle cx="9" cy="9.5" r="0.6" fill="#7C8AA5"></circle><circle cx="15" cy="9.5" r="0.6" fill="#7C8AA5"></circle></svg>
+                </div>
+              </div>
+              <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#2362FD,#00B8D9);display:flex;align-items:center;justify-content:center;box-shadow:0 0 30px rgba(35,98,253,0.50), 0 10px 22px rgba(5,9,18,0.45);flex-shrink:0;">
+                <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg>
+              </div>
+            </div>
+          </div>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:2px;background:rgba(255,255,255,0.35);z-index:40;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div style="margin-top:72px;max-width:900px;background:#FFFFFF;border-radius:20px;padding:24px 28px;box-shadow:0 2px 8px rgba(23,28,38,0.05);">
+    <div style="font-size:12px;font-weight:800;letter-spacing:0.8px;color:#2362FD;text-transform:uppercase;">Следующие шаги</div>
+    <ul style="margin:10px 0 0;padding-left:18px;font-size:13.5px;line-height:1.7;color:#404A5A;">
+      <li>Выберите направление (или микс: «база 02 + пузыри 01», и т.п.) и скажите «ок»</li>
+      <li>После «ок» соберу полный документ <b>Fork Design Spec</b>: M3-палитры light/dark с HEX, Fork-токены, типографика, все 6 экранов, библиотека компонентов, моушн и 7 фирменных деталей</li>
+      <li>Могу также показать светлую тему и остальные экраны выбранного направления до спеки — скажите, если нужно</li>
+    </ul>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

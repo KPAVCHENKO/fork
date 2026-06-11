@@ -54,6 +54,24 @@ object MessageFormat {
     fun bubbleTime(unixSeconds: Int): String =
         SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(unixSeconds * 1000L))
 
+    /** Подпись дня для капсулы-разделителя в чате: «Сегодня», «Вчера», «3 июня». */
+    fun dayLabel(unixSeconds: Int): String {
+        if (unixSeconds <= 0) return ""
+        val then = Calendar.getInstance().apply { time = Date(unixSeconds * 1000L) }
+        val now = Calendar.getInstance()
+        val yesterday = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }
+        fun sameDay(a: Calendar, b: Calendar) =
+            a.get(Calendar.YEAR) == b.get(Calendar.YEAR) &&
+                a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR)
+        return when {
+            sameDay(then, now) -> "Сегодня"
+            sameDay(then, yesterday) -> "Вчера"
+            then.get(Calendar.YEAR) == now.get(Calendar.YEAR) ->
+                SimpleDateFormat("d MMMM", Locale("ru")).format(then.time)
+            else -> SimpleDateFormat("d MMMM yyyy", Locale("ru")).format(then.time)
+        }
+    }
+
     /** Инициалы для аватара-заглушки: «Иван Петров» -> «ИП». */
     fun initials(title: String): String =
         title.split(' ').filter { it.isNotBlank() }.take(2)

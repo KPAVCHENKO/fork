@@ -6,12 +6,14 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
@@ -123,6 +125,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
             }
     }
 
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -215,8 +218,29 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
         }
     }
 
+    // Свайп-назад от левого края экрана (как в Telegram), не мешает свайпу сообщений.
+    Box(
+        Modifier
+            .fillMaxHeight()
+            .width(24.dp)
+            .align(Alignment.CenterStart)
+            .pointerInput(Unit) {
+                var total = 0f
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (total > 56.dp.toPx()) onBack()
+                        total = 0f
+                    },
+                ) { change, drag ->
+                    change.consume()
+                    total += drag
+                }
+            },
+    )
+
     mediaTarget?.let { target ->
         MediaViewer(target = target, onClose = { mediaTarget = null })
+    }
     }
 }
 
@@ -489,6 +513,7 @@ private fun MessageInput() {
 
     val reply by MessageStore.reply.collectAsStateWithLifecycle()
     val enterToSend by SettingsStore.enterToSend.collectAsStateWithLifecycle()
+    var showStickers by remember { mutableStateOf(false) }
 
     fun submit() {
         if (text.isNotBlank()) {
@@ -528,6 +553,17 @@ private fun MessageInput() {
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            IconButton(
+                onClick = { showStickers = !showStickers },
+                modifier = Modifier.size(48.dp),
+            ) {
+                Icon(
+                    app.fork.messenger.ui.ForkIcons.Sticker,
+                    contentDescription = "стикеры",
+                    tint = if (showStickers) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             TextField(
                 value = text,
                 onValueChange = { text = it },
@@ -563,6 +599,11 @@ private fun MessageInput() {
             } else {
                 VoiceButton(context)
             }
+        }
+        if (showStickers) {
+            app.fork.messenger.media.StickerPanel(onPick = { sticker ->
+                MessageStore.sendSticker(sticker)
+            })
         }
         }
     }
