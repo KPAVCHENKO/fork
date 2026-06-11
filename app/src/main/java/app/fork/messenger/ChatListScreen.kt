@@ -63,6 +63,8 @@ import app.fork.messenger.ui.forkTokens
 fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenArchive: () -> Unit = {}) {
     val chats by ChatStore.chatList.collectAsStateWithLifecycle()
     val archive by ChatStore.archiveList.collectAsStateWithLifecycle()
+    val folders by ChatStore.folders.collectAsStateWithLifecycle()
+    val folderChats by ChatStore.folderChats.collectAsStateWithLifecycle()
     val loading by ChatStore.loading.collectAsStateWithLifecycle()
     val connection by TdClient.connectionState.collectAsStateWithLifecycle()
     val updateState by app.fork.messenger.update.UpdateManager.state.collectAsStateWithLifecycle()
@@ -100,18 +102,20 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenAr
             return@Column
         }
 
-        val tabs = listOf("Все", "Личные", "Группы", "Каналы")
+        // Вкладки = настоящие папки Telegram пользователя (как в оригинальном клиенте).
+        val tabs = listOf("Все") + folders.map { it.title }
+        val safeTab = tab.coerceIn(0, tabs.lastIndex)
         when (tokens.style) {
             SettingsStore.ThemeStyle.AURORA -> AuroraHeader(
-                title = title, tabs = tabs, tab = tab,
+                title = title, tabs = tabs, tab = safeTab,
                 onTab = { tab = it }, onSearch = { searching = true }, onSettings = onSettings,
             )
             SettingsStore.ThemeStyle.FROST -> FrostHeader(
-                title = title, tabs = tabs, tab = tab,
+                title = title, tabs = tabs, tab = safeTab,
                 onTab = { tab = it }, onSearch = { searching = true }, onSettings = onSettings,
             )
             SettingsStore.ThemeStyle.NEON -> NeonHeader(
-                title = title, tabs = tabs, tab = tab,
+                title = title, tabs = tabs, tab = safeTab,
                 onTab = { tab = it }, onSearch = { searching = true }, onSettings = onSettings,
             )
         }
@@ -121,11 +125,10 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenAr
             UpdateBanner(version = available.release.version, onClick = onSettings)
         }
 
-        val filtered = when (tab) {
-            1 -> chats.filter { it.kind == ChatKind.PRIVATE }
-            2 -> chats.filter { it.kind == ChatKind.GROUP }
-            3 -> chats.filter { it.kind == ChatKind.CHANNEL }
-            else -> chats
+        val filtered = if (safeTab == 0) {
+            chats
+        } else {
+            folderChats[folders.getOrNull(safeTab - 1)?.id].orEmpty()
         }
 
         if (filtered.isEmpty()) {
@@ -138,7 +141,7 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenAr
             }
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
-                if (tab == 0 && archive.isNotEmpty()) {
+                if (safeTab == 0 && archive.isNotEmpty()) {
                     item(key = "archive_entry") {
                         ArchiveEntry(count = archive.sumOf { it.unread }, onClick = onOpenArchive)
                     }
@@ -657,6 +660,17 @@ private fun ChatRow(chat: UiChat, onClick: () -> Unit) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val voicePreview = chat.preview.startsWith("🎤")
+                chat.previewThumb?.let { thumb ->
+                    androidx.compose.foundation.Image(
+                        bitmap = thumb,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                    )
+                    Spacer(Modifier.width(5.dp))
+                }
                 Text(
                     text = chat.preview,
                     style = MaterialTheme.typography.bodyMedium,

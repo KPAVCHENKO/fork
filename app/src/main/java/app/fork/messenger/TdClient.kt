@@ -120,13 +120,22 @@ object TdClient {
 
     // ---------- Обработка апдейтов TDLib ----------
 
+    /** Ошибка в одном обработчике не должна лишать остальных этого апдейта. */
+    private inline fun safely(tag: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            Log.e(TAG, "update handler failed: $tag", t)
+        }
+    }
+
     private fun onUpdate(obj: TdApi.Object) {
-        UserCache.handleUpdate(obj)
-        app.fork.messenger.media.FileHub.handleUpdate(obj)
-        TypingTracker.handleUpdate(obj)
-        ChatStore.handleUpdate(obj)
-        MessageStore.handleUpdate(obj)
-        app.fork.messenger.notify.NotificationsCenter.handleUpdate(obj)
+        safely("UserCache") { UserCache.handleUpdate(obj) }
+        safely("FileHub") { app.fork.messenger.media.FileHub.handleUpdate(obj) }
+        safely("TypingTracker") { TypingTracker.handleUpdate(obj) }
+        safely("ChatStore") { ChatStore.handleUpdate(obj) }
+        safely("MessageStore") { MessageStore.handleUpdate(obj) }
+        safely("Notifications") { app.fork.messenger.notify.NotificationsCenter.handleUpdate(obj) }
 
         when (obj) {
             is TdApi.UpdateAuthorizationState -> onAuthorizationState(obj.authorizationState)
