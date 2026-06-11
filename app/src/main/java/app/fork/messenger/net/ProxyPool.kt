@@ -64,7 +64,10 @@ object ProxyPool {
         val list = candidates(context).take(MAX_TESTED)
         if (list.isEmpty()) return
         if (list.size == 1) {
-            enable(list.first())
+            // Cold start / single proxy: enable immediately, no GetProxies round-trip,
+            // so TDLib starts the proxy handshake as early as possible. TDLib dedups
+            // identical proxies, so repeated launches don't accumulate entries.
+            TdClient.send(TdApi.AddProxy(proxyOf(list.first()), true, "Fork"))
             return
         }
         selecting = true

@@ -175,6 +175,9 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val reversed = messages.asReversed()
+    // Пауза анимаций стикеров во время прокрутки (плавный фling). derivedStateOf —
+    // меняется только на старт/стоп скролла, а не каждый кадр.
+    val isScrolling by remember { derivedStateOf { listState.isScrollInProgress } }
 
     // Автопрокрутка к новому сообщению, если пользователь уже у низа.
     val newestId = reversed.firstOrNull()?.id
@@ -418,6 +421,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                     else selection.add(message.id)
                                 },
                                 onOpenStickerSet = { stickerSetId = it },
+                                animateStickers = !isScrolling,
                             )
                         }
                     }
@@ -696,6 +700,7 @@ fun MessageBubble(
     message: UiMessage,
     onOpenMedia: (MediaTarget) -> Unit,
     onOpenStickerSet: (Long) -> Unit = {},
+    animateStickers: Boolean = true,
 ) {
     val tokens = forkTokens
     val content = message.content
@@ -706,8 +711,8 @@ fun MessageBubble(
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
             horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start,
         ) {
-            // Тап по стикеру открывает его набор (как в Telegram).
-            StickerContent(content.sticker) {
+            // Анимируем только когда список не скроллится (play=animateStickers).
+            StickerContent(content.sticker, play = animateStickers) {
                 if (content.sticker.setId != 0L) onOpenStickerSet(content.sticker.setId)
             }
         }

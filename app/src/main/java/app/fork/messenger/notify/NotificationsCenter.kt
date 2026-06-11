@@ -27,6 +27,12 @@ object NotificationsCenter {
 
     private var appContext: Context? = null
 
+    // Cached scope default mute (TDLib pushes these via UpdateScopeNotificationSettings
+    // at startup and on change). Used when a chat defers to its scope default.
+    @Volatile private var privateScopeMuteFor = 0
+    @Volatile private var groupScopeMuteFor = 0
+    @Volatile private var channelScopeMuteFor = 0
+
     fun init(context: Context) {
         appContext = context.applicationContext
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -42,23 +48,58 @@ object NotificationsCenter {
     }
 
     fun handleUpdate(obj: TdApi.Object) {
-        if (obj is TdApi.UpdateNewMessage) onNewMessage(obj.message)
+        when (obj) {
+            is TdApi.UpdateNewMessage -> onNewMessage(obj.message)
+            is TdApi.UpdateScopeNotificationSettings -> onScopeSettings(obj)
+        }
+    }
+
+    /** Cache the per-scope default mute so default-deferring chats resolve correctly. */
+    private fun onScopeSettings(update: TdApi.UpdateScopeNotificationSettings) {
+        val muteFor = update.notificationSettings?.muteFor ?: 0
+        when (update.scope) {
+            is TdApi.NotificationSettingsScopePrivateChats -> privateScopeMuteFor = muteFor
+            is TdApi.NotificationSettingsScopeGroupChats -> groupScopeMuteFor = muteFor
+            is TdApi.NotificationSettingsScopeChannelChats -> channelScopeMuteFor = muteFor
+        }
+    }
+
+    private fun scopeOf(chat: TdApi.Chat): NotificationPolicy.Scope = when (val t = chat.type) {
+        is TdApi.ChatTypeSupergroup -> if (t.isChannel) NotificationPolicy.Scope.CHANNEL
+        else NotificationPolicy.Scope.GROUP
+        is TdApi.ChatTypeBasicGroup -> NotificationPolicy.Scope.GROUP
+        else -> NotificationPolicy.Scope.PRIVATE
+    }
+
+    private fun scopeMuteFor(scope: NotificationPolicy.Scope): Int = when (scope) {
+        NotificationPolicy.Scope.PRIVATE -> privateScopeMuteFor
+        NotificationPolicy.Scope.GROUP -> groupScopeMuteFor
+        NotificationPolicy.Scope.CHANNEL -> channelScopeMuteFor
     }
 
     private fun onNewMessage(message: TdApi.Message) {
         val context = appContext ?: return
-        if (!app.fork.messenger.SettingsStore.notificationsEnabled.value) return
         if (message.isOutgoing) return
-        // Не шумим про чат, который сейчас открыт.
-        if (MessageStore.isViewing(message.chatId)) return
 
         val chat = ChatStore.chat(message.chatId) ?: return
-        // Уважаем «без звука».
-        val muted = (chat.notificationSettings?.takeIf { !it.useDefaultMuteFor }?.muteFor ?: 0) > 0
-        if (muted) return
 
-        val isGroup = chat.type is TdApi.ChatTypeBasicGroup ||
-            (chat.type is TdApi.ChatTypeSupergroup && !(chat.type as TdApi.ChatTypeSupergroup).isChannel)
+        // Effective mute: per-chat setting overrides scope default (see NotificationPolicy).
+        val settings = chat.notificationSettings
+        val scope = scopeOf(chat)
+        val muted = NotificationPolicy.isMuted(
+            useDefaultMute = settings?.useDefaultMuteFor ?: true,
+            chatMuteFor = settings?.muteFor ?: 0,
+            scopeMuteFor = scopeMuteFor(scope),
+        )
+        val notify = NotificationPolicy.shouldNotify(
+            globalEnabled = app.fork.messenger.SettingsStore.notificationsEnabled.value,
+            isOutgoing = message.isOutgoing,
+            isViewingChat = MessageStore.isViewing(message.chatId),
+            muted = muted,
+        )
+        if (!notify) return
+
+        val isGroup = scope == NotificationPolicy.Scope.GROUP
 
         val body = MessageFormat.contentText(message.content)
         val text = if (isGroup) {
