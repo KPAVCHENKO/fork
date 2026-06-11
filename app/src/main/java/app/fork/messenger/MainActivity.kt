@@ -94,6 +94,7 @@ private fun MainNavigation() {
     var infoChatId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showNewChat by rememberSaveable { mutableStateOf(false) }
+    var showArchive by rememberSaveable { mutableStateOf(false) }
 
     // Открытие чата по тапу на уведомление.
     val pending by Navigator.pendingChat.collectAsStateWithLifecycle()
@@ -125,6 +126,10 @@ private fun MainNavigation() {
             onBack = { showNewChat = false },
             onOpenChat = { showNewChat = false; openChatId = it },
         )
+        showArchive -> ArchiveScreen(
+            onBack = { showArchive = false },
+            onOpenChat = { showArchive = false; openChatId = it },
+        )
         showSettings -> SettingsScreen(onBack = { showSettings = false })
         info != null -> ChatInfoScreen(chatId = info, onBack = { infoChatId = null })
         chatId != null -> ChatScreen(
@@ -136,6 +141,7 @@ private fun MainNavigation() {
             ChatListScreen(
                 onChatClick = { openChatId = it },
                 onSettings = { showSettings = true },
+                onOpenArchive = { showArchive = true },
             )
             NewChatFab(
                 onClick = { showNewChat = true },

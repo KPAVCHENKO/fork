@@ -44,6 +44,13 @@ object ContactsStore {
         }
     }
 
+    /** Открывает «Избранное» (чат с самим собой). */
+    fun openSavedMessages(onOpen: (Long) -> Unit) {
+        TdClient.send(TdApi.GetMe()) { me ->
+            if (me is TdApi.User) openChat(me.id, onOpen)
+        }
+    }
+
     private fun rebuild() {
         _contacts.value = userIds.toList().mapNotNull { id ->
             val user = UserCache.user(id) ?: return@mapNotNull null

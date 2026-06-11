@@ -171,6 +171,7 @@ object TdClient {
             is TdApi.AuthorizationStateReady -> {
                 _authState.value = AuthUiState.Ready
                 ChatStore.loadChats()
+                ChatStore.loadArchive()
                 // Подписка на пуши: дальше сервер Telegram будит нас через Firebase.
                 runCatching {
                     com.google.firebase.messaging.FirebaseMessaging.getInstance().token

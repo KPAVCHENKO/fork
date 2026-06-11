@@ -37,6 +37,9 @@ object ChatStore {
     private val _chatList = MutableStateFlow<List<UiChat>>(emptyList())
     val chatList: StateFlow<List<UiChat>> = _chatList.asStateFlow()
 
+    private val _archiveList = MutableStateFlow<List<UiChat>>(emptyList())
+    val archiveList: StateFlow<List<UiChat>> = _archiveList.asStateFlow()
+
     private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
@@ -51,6 +54,44 @@ object ChatStore {
                 result is TdApi.Ok -> loadChats()
                 else -> _loading.value = false // 404 = всё загружено
             }
+        }
+    }
+
+    /** Загружает архивный список чатов. */
+    fun loadArchive() {
+        TdClient.send(TdApi.LoadChats(TdApi.ChatListArchive(), 50)) { result ->
+            if (result is TdApi.Ok) loadArchive()
+        }
+    }
+
+    // ---------- Действия с чатом ----------
+
+    fun archive(chatId: Long, archived: Boolean) {
+        val list: TdApi.ChatList = if (archived) TdApi.ChatListArchive() else TdApi.ChatListMain()
+        TdClient.send(TdApi.AddChatToList(chatId, list))
+    }
+
+    fun togglePin(chatId: Long) {
+        val chat = chat(chatId) ?: return
+        val pinned = chat.positions.any { it.list is TdApi.ChatListMain && it.isPinned }
+        TdClient.send(TdApi.ToggleChatIsPinned(TdApi.ChatListMain(), chatId, !pinned))
+    }
+
+    fun toggleMute(chatId: Long) {
+        val chat = chat(chatId) ?: return
+        val muted = (chat.notificationSettings?.takeIf { !it.useDefaultMuteFor }?.muteFor ?: 0) > 0
+        val settings = (chat.notificationSettings ?: TdApi.ChatNotificationSettings()).also {
+            it.useDefaultMuteFor = false
+            it.muteFor = if (muted) 0 else 500_000_000
+        }
+        TdClient.send(TdApi.SetChatNotificationSettings(chatId, settings))
+    }
+
+    fun deleteOrLeave(chatId: Long) {
+        val chat = chat(chatId) ?: return
+        when (chat.type) {
+            is TdApi.ChatTypeBasicGroup, is TdApi.ChatTypeSupergroup -> TdClient.send(TdApi.LeaveChat(chatId))
+            else -> TdClient.send(TdApi.DeleteChatHistory(chatId, true, false))
         }
     }
 
@@ -122,14 +163,22 @@ object ChatStore {
     private fun mainOrder(chat: TdApi.Chat): Long =
         chat.positions.firstOrNull { it.list is TdApi.ChatListMain }?.order ?: 0L
 
+    private fun archiveOrder(chat: TdApi.Chat): Long =
+        chat.positions.firstOrNull { it.list is TdApi.ChatListArchive }?.order ?: 0L
+
     private fun rebuild() {
-        val snapshot = synchronized(lock) {
-            chats.values
-                .filter { mainOrder(it) != 0L }
+        val (main, archive) = synchronized(lock) {
+            val all = chats.values
+            val main = all.filter { mainOrder(it) != 0L }
                 .sortedByDescending { mainOrder(it) }
                 .map { toUi(it) }
+            val archive = all.filter { archiveOrder(it) != 0L }
+                .sortedByDescending { archiveOrder(it) }
+                .map { toUi(it) }
+            main to archive
         }
-        _chatList.value = snapshot
+        _chatList.value = main
+        _archiveList.value = archive
         _revision.value++
         MessageStore.rebuildHeader()
     }

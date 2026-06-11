@@ -59,8 +59,9 @@ import app.fork.messenger.ui.forkTokens
 
 /** Главный экран — список чатов (Fork Design Spec §4.2). */
 @Composable
-fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit) {
+fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenArchive: () -> Unit = {}) {
     val chats by ChatStore.chatList.collectAsStateWithLifecycle()
+    val archive by ChatStore.archiveList.collectAsStateWithLifecycle()
     val loading by ChatStore.loading.collectAsStateWithLifecycle()
     val connection by TdClient.connectionState.collectAsStateWithLifecycle()
     val updateState by app.fork.messenger.update.UpdateManager.state.collectAsStateWithLifecycle()
@@ -136,11 +137,46 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit) {
             }
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
+                if (tab == 0 && archive.isNotEmpty()) {
+                    item(key = "archive_entry") {
+                        ArchiveEntry(count = archive.sumOf { it.unread }, onClick = onOpenArchive)
+                    }
+                }
                 items(filtered, key = { it.id }) { chat ->
                     ChatRow(chat = chat, onClick = { onChatClick(chat.id) })
                 }
             }
         }
+    }
+}
+
+/** Строка входа в архив над списком чатов. */
+@Composable
+private fun ArchiveEntry(count: Int, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                ForkIcons.Archive,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text("Архив", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+        if (count > 0) UnreadBadge(count = count, muted = true)
     }
 }
 

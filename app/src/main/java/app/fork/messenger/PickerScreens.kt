@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +25,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -96,19 +99,42 @@ private fun PickerRow(
     }
 }
 
-/** Новый чат: список контактов, тап открывает личный чат. */
+/** Новый чат: «Избранное» + список контактов. */
 @Composable
 fun NewChatScreen(onBack: () -> Unit, onOpenChat: (Long) -> Unit) {
     LaunchedEffect(Unit) { ContactsStore.load() }
     val contacts by ContactsStore.contacts.collectAsStateWithLifecycle()
 
     PickerScaffold(title = "Новый чат", onBack = onBack) {
-        if (contacts.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                ForkEmptyState(title = "Нет контактов", subtitle = "Здесь появятся ваши контакты из Telegram")
+        LazyColumn(Modifier.fillMaxSize()) {
+            item(key = "saved") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { ContactsStore.openSavedMessages { onOpenChat(it) } }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .background(app.fork.messenger.ui.forkTokens.brandGradient),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(ForkIcons.ForkMark, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text("Избранное", style = MaterialTheme.typography.titleMedium)
+                }
             }
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
+            if (contacts.isEmpty()) {
+                item(key = "empty") {
+                    Box(Modifier.fillMaxWidth().padding(top = 48.dp), contentAlignment = Alignment.Center) {
+                        ForkEmptyState(title = "Нет контактов", subtitle = "Здесь появятся ваши контакты из Telegram")
+                    }
+                }
+            } else {
                 items(contacts, key = { it.userId }) { c ->
                     PickerRow(
                         title = c.name,
@@ -118,6 +144,33 @@ fun NewChatScreen(onBack: () -> Unit, onOpenChat: (Long) -> Unit) {
                         seed = c.userId,
                         online = c.isOnline,
                         onClick = { ContactsStore.openChat(c.userId) { onOpenChat(it) } },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Архив: список архивных чатов. */
+@Composable
+fun ArchiveScreen(onBack: () -> Unit, onOpenChat: (Long) -> Unit) {
+    val archive by ChatStore.archiveList.collectAsStateWithLifecycle()
+    PickerScaffold(title = "Архив", onBack = onBack) {
+        if (archive.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                ForkEmptyState(title = "Архив пуст", subtitle = "Архивированные чаты появятся здесь")
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(archive, key = { it.id }) { chat ->
+                    PickerRow(
+                        title = chat.title,
+                        subtitle = chat.preview.ifBlank { null },
+                        avatarPath = chat.avatarPath,
+                        initials = chat.initials,
+                        seed = chat.colorSeed,
+                        online = chat.isOnline,
+                        onClick = { onOpenChat(chat.id) },
                     )
                 }
             }
