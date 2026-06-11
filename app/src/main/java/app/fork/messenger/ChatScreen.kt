@@ -317,7 +317,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
             },
             bottomBar = {
                 if (header?.canWrite != false) {
-                    MessageInput()
+                    MessageInput(chatId)
                 } else {
                     ReadOnlyBar()
                 }
@@ -1082,9 +1082,20 @@ private fun captionText(content: TdApi.MessageContent?): String? {
 }
 
 @Composable
-private fun MessageInput() {
-    var text by rememberSaveable { mutableStateOf("") }
+private fun MessageInput(chatId: Long) {
+    var text by rememberSaveable(chatId) { mutableStateOf("") }
     val context = LocalContext.current
+
+    // Черновик: подставляем при входе в чат, автосохраняем в Telegram с дебаунсом.
+    LaunchedEffect(chatId) {
+        MessageStore.draftText.value?.let { draft ->
+            if (text.isEmpty()) text = draft
+        }
+    }
+    LaunchedEffect(text) {
+        kotlinx.coroutines.delay(700)
+        MessageStore.saveDraft(text)
+    }
 
     // Выбор фото/видео из галереи: сначала показываем предпросмотр с подписью.
     var pendingMedia by remember { mutableStateOf<PendingMedia?>(null) }

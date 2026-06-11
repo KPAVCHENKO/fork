@@ -179,6 +179,11 @@ object ChatStore {
                 if (obj.positions.isNotEmpty()) it.positions = obj.positions
             }
 
+            is TdApi.UpdateChatDraftMessage -> mutate(obj.chatId) {
+                it.draftMessage = obj.draftMessage
+                if (obj.positions.isNotEmpty()) it.positions = obj.positions
+            }
+
             is TdApi.UpdateChatPosition -> mutate(obj.chatId) { chat ->
                 // Заменяем позицию ТОЛЬКО того же списка: у папок один класс,
                 // но разные id — сравнение по классу стирало позиции других папок.
@@ -319,10 +324,14 @@ object ChatStore {
                 .removePrefix("🖼 ").removePrefix("🎬 ").removePrefix("🎞 ")
         }
 
+        // Черновик имеет приоритет в превью (как в Telegram).
+        val draft = (chat.draftMessage?.inputMessageText as? TdApi.InputMessageText)
+            ?.text?.text?.takeIf { it.isNotBlank() }
+
         return UiChat(
             id = chat.id,
             title = chat.title.ifBlank { "Без названия" },
-            preview = senderPrefix + previewText,
+            preview = if (draft != null) "Черновик: $draft" else senderPrefix + previewText,
             time = MessageFormat.listTime(last?.date ?: 0),
             unread = chat.unreadCount,
             isPinned = chat.positions.any { it.list is TdApi.ChatListMain && it.isPinned },

@@ -1,8 +1,14 @@
 package app.fork.messenger
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 
 /** Готовое к показу сообщение. */
@@ -62,6 +68,20 @@ data class ChatHeader(
 object MessageStore {
     private val lock = Any()
     private var chatId: Long = 0
+
+    // Пересборка ленты — на фоне с коалесцией, чтобы шквал апдейтов
+    // (реакции/прочтения в активной группе) не задерживал поток TDLib.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val rebuildRequests = Channel<Unit>(Channel.CONFLATED)
+
+    init {
+        scope.launch {
+            for (unused in rebuildRequests) {
+                doRebuild()
+                delay(32)
+            }
+        }
+    }
     private var isGroup = false
     private var chatCanDeleteForSelf = false
     private var chatCanDeleteForAll = false
@@ -96,6 +116,12 @@ object MessageStore {
     /** id сообщения, к которому UI должен прокрутиться (после прыжка из поиска/закрепа). */
     private val _scrollTo = MutableStateFlow<Long?>(null)
     val scrollTo: StateFlow<Long?> = _scrollTo.asStateFlow()
+
+    /** Черновик открытого чата (текст из Telegram, синхронизируется между устройствами). */
+    private val _draftText = MutableStateFlow<String?>(null)
+    val draftText: StateFlow<String?> = _draftText.asStateFlow()
+
+    private var lastSavedDraft: String = ""
 
     /** true: показано «окно» истории не у самого низа (после прыжка к старому сообщению). */
     private val _detached = MutableStateFlow(false)
@@ -134,8 +160,28 @@ object MessageStore {
         _searchHits.value = emptyList()
         _scrollTo.value = null
         _detached.value = false
+        val draft = ((chat?.draftMessage?.inputMessageText) as? TdApi.InputMessageText)?.text?.text
+        _draftText.value = draft?.takeIf { it.isNotBlank() }
+        lastSavedDraft = draft.orEmpty()
         refreshPinned(id)
         loadMore()
+    }
+
+    /** Сохраняет черновик в Telegram (пустой текст очищает черновик). */
+    fun saveDraft(text: String) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L || text == lastSavedDraft) return
+        lastSavedDraft = text
+        val draft = text.takeIf { it.isNotBlank() }?.let {
+            TdApi.DraftMessage(
+                null,
+                (System.currentTimeMillis() / 1000).toInt(),
+                TdApi.InputMessageText(TdApi.FormattedText(it, null), null, false),
+                0,
+                null,
+            )
+        }
+        TdClient.send(TdApi.SetChatDraftMessage(id, null, draft))
     }
 
     // ---------- Поиск по чату и прыжок к сообщению ----------
@@ -601,6 +647,10 @@ object MessageStore {
     }
 
     private fun rebuild() {
+        rebuildRequests.trySend(Unit)
+    }
+
+    private fun doRebuild() {
         val snapshot = synchronized(lock) { msgs.toList() }
         _messages.value = snapshot.mapIndexed { i, m ->
             val senderId = (m.senderId as? TdApi.MessageSenderUser)?.userId ?: 0L
