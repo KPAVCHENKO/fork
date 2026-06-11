@@ -3,6 +3,7 @@ package app.fork.messenger
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -151,7 +153,7 @@ fun NewChatScreen(onBack: () -> Unit, onOpenChat: (Long) -> Unit) {
     }
 }
 
-/** Архив: список архивных чатов. */
+/** Архив: список архивных чатов; долгое нажатие — вернуть из архива. */
 @Composable
 fun ArchiveScreen(onBack: () -> Unit, onOpenChat: (Long) -> Unit) {
     val archive by ChatStore.archiveList.collectAsStateWithLifecycle()
@@ -163,17 +165,45 @@ fun ArchiveScreen(onBack: () -> Unit, onOpenChat: (Long) -> Unit) {
         } else {
             LazyColumn(Modifier.fillMaxSize()) {
                 items(archive, key = { it.id }) { chat ->
-                    PickerRow(
-                        title = chat.title,
-                        subtitle = chat.preview.ifBlank { null },
-                        avatarPath = chat.avatarPath,
-                        initials = chat.initials,
-                        seed = chat.colorSeed,
-                        online = chat.isOnline,
-                        onClick = { onOpenChat(chat.id) },
+                    ArchiveRow(chat = chat, onClick = { onOpenChat(chat.id) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun ArchiveRow(chat: UiChat, onClick: () -> Unit) {
+    var menuOpen by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ForkAvatar(size = 50.dp, avatarPath = chat.avatarPath, initials = chat.initials, seed = chat.colorSeed, online = chat.isOnline)
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (chat.preview.isNotBlank()) {
+                    Text(
+                        chat.preview,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
+        }
+        androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Вернуть из архива") },
+                onClick = { ChatStore.archive(chat.id, false); menuOpen = false },
+            )
         }
     }
 }
