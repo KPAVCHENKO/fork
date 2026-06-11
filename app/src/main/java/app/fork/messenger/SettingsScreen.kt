@@ -2,8 +2,14 @@ package app.fork.messenger
 
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,20 +17,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -33,14 +36,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.fork.messenger.SettingsStore
-import app.fork.messenger.update.UpdateState
+import app.fork.messenger.ui.ForkAvatar
+import app.fork.messenger.ui.ForkIcons
+import app.fork.messenger.ui.GradientButton
+import app.fork.messenger.ui.forkTokens
 import app.fork.messenger.update.UpdateManager
+import app.fork.messenger.update.UpdateState
 
+/** Настройки (Fork Design Spec §4.5): карточные группы, переключатель трёх стилей. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
@@ -49,88 +58,284 @@ fun SettingsScreen(onBack: () -> Unit) {
     val updateState by UpdateManager.state.collectAsStateWithLifecycle()
     BackHandler(onBack = onBack)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(app.fork.messenger.ui.ForkIcons.ArrowBack, contentDescription = "назад")
-                    }
-                },
-                title = { Text("Настройки", fontWeight = FontWeight.SemiBold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
-        },
-    ) { padding ->
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+    ) {
+        TopAppBar(
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        ForkIcons.ArrowBack,
+                        contentDescription = "назад",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            },
+            title = { Text("Настройки", style = MaterialTheme.typography.titleLarge) },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+            ),
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .padding(horizontal = 16.dp),
         ) {
-            Text(myName ?: "Аккаунт", style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                "Версия ${BuildConfig.VERSION_NAME}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
-            )
+            // Карточка профиля
+            SettingsCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val name = myName ?: "Аккаунт"
+                    ForkAvatar(
+                        size = 72.dp,
+                        avatarPath = null,
+                        initials = MessageFormat.initials(name),
+                        seed = name.hashCode().toLong(),
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(name, style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "Fork ${BuildConfig.VERSION_NAME}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
 
-            Spacer(Modifier.height(28.dp))
-            Text("Оформление", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
-            AppearanceSection()
+            SectionLabel("Оформление")
+            SettingsCard { AppearanceSection() }
 
-            Spacer(Modifier.height(28.dp))
-            Text("Уведомления и поведение", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
-            BehaviorSection(context)
+            SectionLabel("Уведомления и поведение")
+            SettingsCard { BehaviorSection(context) }
 
-            Spacer(Modifier.height(28.dp))
-            Text("Обновления", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
-            UpdateSection(updateState, context)
+            SectionLabel("Обновления")
+            SettingsCard { UpdateSection(updateState, context) }
 
             Spacer(Modifier.height(24.dp))
         }
     }
 }
 
+/** Заголовок группы настроек. */
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 16.dp, top = 20.dp, bottom = 8.dp),
+    )
+}
+
+/** Карточка-группа: surfaceContainer, радиус 22 (Fork Design Spec §4.5). */
+@Composable
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(16.dp),
+        content = content,
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Оформление: стиль × режим × AMOLED × Material You
+// ---------------------------------------------------------------------------
+
 @Composable
 private fun AppearanceSection() {
     val theme by SettingsStore.theme.collectAsStateWithLifecycle()
+    val style by SettingsStore.style.collectAsStateWithLifecycle()
+    val amoled by SettingsStore.amoled.collectAsStateWithLifecycle()
     val dynamic by SettingsStore.dynamicColors.collectAsStateWithLifecycle()
 
-    Text("Тема", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    Spacer(Modifier.height(8.dp))
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-        val modes = listOf(
-            SettingsStore.ThemeMode.SYSTEM to "Системная",
-            SettingsStore.ThemeMode.LIGHT to "Светлая",
-            SettingsStore.ThemeMode.DARK to "Тёмная",
+    // Три встроенных стиля — превью-карточки.
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ThemeCard(
+            name = "Aurora",
+            style = SettingsStore.ThemeStyle.AURORA,
+            selected = style == SettingsStore.ThemeStyle.AURORA,
+            background = Color(0xFF0E1424),
+            bubbleIn = Color(0xFF1B2742),
+            modifier = Modifier.weight(1f),
         )
-        modes.forEachIndexed { index, (mode, label) ->
-            SegmentedButton(
-                selected = theme == mode,
-                onClick = { SettingsStore.setTheme(mode) },
-                shape = SegmentedButtonDefaults.itemShape(index, modes.size),
-            ) { Text(label) }
-        }
+        ThemeCard(
+            name = "Frost",
+            style = SettingsStore.ThemeStyle.FROST,
+            selected = style == SettingsStore.ThemeStyle.FROST,
+            background = Color(0xFF0A0F1E),
+            bubbleIn = Color(0xFF222C48),
+            modifier = Modifier.weight(1f),
+        )
+        ThemeCard(
+            name = "Neon Ink",
+            style = SettingsStore.ThemeStyle.NEON,
+            selected = style == SettingsStore.ThemeStyle.NEON,
+            background = Color(0xFF070B14),
+            bubbleIn = Color(0xFF121B30),
+            modifier = Modifier.weight(1f),
+        )
     }
 
+    Spacer(Modifier.height(16.dp))
+
+    // Режим: Светлая / Тёмная / Системная — сегмент-контрол с градиентной заливкой.
+    ModeSegments(theme)
+
+    val dark = when (theme) {
+        SettingsStore.ThemeMode.SYSTEM -> isSystemInDarkTheme()
+        SettingsStore.ThemeMode.LIGHT -> false
+        SettingsStore.ThemeMode.DARK -> true
+    }
+
+    Spacer(Modifier.height(8.dp))
+    ToggleRow(
+        title = "Чисто чёрный (AMOLED)",
+        subtitle = "Экономит заряд на OLED-экранах",
+        checked = amoled && dark,
+        enabled = dark,
+        onCheckedChange = { SettingsStore.setAmoled(it) },
+    )
+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        Spacer(Modifier.height(8.dp))
         ToggleRow(
-            title = "Цвета системы (Material You)",
-            subtitle = "Подстраивать палитру под обои телефона",
+            title = "Material You",
+            subtitle = "Цвета из обоев · Android 12+",
             checked = dynamic,
             onCheckedChange = { SettingsStore.setDynamicColors(it) },
         )
     }
 }
+
+/** Превью-карточка стиля: мини-скрин чата (Fork Design Spec §4.5). */
+@Composable
+private fun ThemeCard(
+    name: String,
+    style: SettingsStore.ThemeStyle,
+    selected: Boolean,
+    background: Color,
+    bubbleIn: Color,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = forkTokens
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        modifier = modifier
+            .height(148.dp)
+            .clip(shape)
+            .background(background)
+            .then(
+                if (selected) Modifier.border(2.dp, tokens.brandGradient, shape)
+                else Modifier.border(1.dp, Color.White.copy(alpha = 0.08f), shape),
+            )
+            .clickable { SettingsStore.setStyle(style) },
+    ) {
+        Column(Modifier.padding(10.dp)) {
+            // Входящий пузырь
+            Box(
+                Modifier
+                    .width(52.dp)
+                    .height(18.dp)
+                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 3.dp, bottomEnd = 8.dp))
+                    .background(bubbleIn),
+            )
+            Spacer(Modifier.height(6.dp))
+            // Исходящий — фирменный градиент
+            Box(
+                Modifier
+                    .width(64.dp)
+                    .height(18.dp)
+                    .align(Alignment.End)
+                    .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 8.dp, bottomEnd = 3.dp))
+                    .background(tokens.brandGradient),
+            )
+            Spacer(Modifier.height(6.dp))
+            // Капсула-дата
+            Box(
+                Modifier
+                    .width(36.dp)
+                    .height(10.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(Color.White.copy(alpha = 0.12f)),
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                name,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFF1F5FF),
+            )
+        }
+        if (selected) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(tokens.checkCyan),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    ForkIcons.Check,
+                    contentDescription = null,
+                    tint = Color(0xFF04121C),
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Сегмент-контрол режима: активный сегмент залит фирменным градиентом. */
+@Composable
+private fun ModeSegments(current: SettingsStore.ThemeMode) {
+    val tokens = forkTokens
+    val modes = listOf(
+        SettingsStore.ThemeMode.LIGHT to "Светлая",
+        SettingsStore.ThemeMode.DARK to "Тёмная",
+        SettingsStore.ThemeMode.SYSTEM to "Системная",
+    )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(3.dp),
+    ) {
+        modes.forEach { (mode, label) ->
+            val active = current == mode
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .height(34.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .then(if (active) Modifier.background(tokens.brandGradient) else Modifier)
+                    .clickable { SettingsStore.setTheme(mode) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (active) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Поведение и обновления
+// ---------------------------------------------------------------------------
 
 @Composable
 private fun BehaviorSection(context: android.content.Context) {
@@ -143,7 +348,6 @@ private fun BehaviorSection(context: android.content.Context) {
         checked = notifications,
         onCheckedChange = { SettingsStore.setNotificationsEnabled(it) },
     )
-    Spacer(Modifier.height(4.dp))
     ToggleRow(
         title = "Enter отправляет сообщение",
         subtitle = "Иначе Enter — перенос строки",
@@ -151,7 +355,8 @@ private fun BehaviorSection(context: android.content.Context) {
         onCheckedChange = { SettingsStore.setEnterToSend(it) },
     )
     Spacer(Modifier.height(12.dp))
-    OutlinedButton(
+    GradientButton(
+        text = "Отключить экономию батареи",
         onClick = {
             runCatching {
                 context.startActivity(
@@ -159,26 +364,40 @@ private fun BehaviorSection(context: android.content.Context) {
                 )
             }
         },
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Text("Отключить экономию батареи для Fork")
-    }
+    )
     Text(
         "Чтобы сообщения приходили мгновенно даже в фоне",
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.outline,
-        modifier = Modifier.padding(top = 4.dp),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp),
     )
 }
 
 @Composable
-private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+private fun ToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+    ) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.38f),
+            )
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f),
+            )
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
@@ -188,8 +407,7 @@ private fun UpdateSection(state: UpdateState, context: android.content.Context) 
         is UpdateState.Available -> {
             Text(
                 "Доступна версия ${state.release.version}",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
             if (state.release.notes.isNotBlank()) {
@@ -201,14 +419,10 @@ private fun UpdateSection(state: UpdateState, context: android.content.Context) 
                 )
             }
             Spacer(Modifier.height(14.dp))
-            Button(
+            GradientButton(
+                text = "Скачать и установить",
                 onClick = { UpdateManager.downloadAndInstall(context) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(app.fork.messenger.ui.ForkIcons.Download, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.size(8.dp))
-                Text("Скачать и установить")
-            }
+            )
         }
 
         is UpdateState.Downloading -> {
@@ -217,6 +431,7 @@ private fun UpdateSection(state: UpdateState, context: android.content.Context) 
             LinearProgressIndicator(
                 progress = { state.percent / 100f },
                 modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primary,
             )
         }
 
@@ -231,13 +446,17 @@ private fun UpdateSection(state: UpdateState, context: android.content.Context) 
         UpdateState.Checking -> RowStatus("Проверка…", spinning = true)
 
         UpdateState.UpToDate -> {
-            Text("У вас последняя версия", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "У вас последняя версия",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Spacer(Modifier.height(12.dp))
             CheckButton(context)
         }
 
         is UpdateState.Failed -> {
-            Text(state.message, color = MaterialTheme.colorScheme.error)
+            Text(state.message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(12.dp))
             CheckButton(context)
         }
@@ -248,11 +467,20 @@ private fun UpdateSection(state: UpdateState, context: android.content.Context) 
 
 @Composable
 private fun CheckButton(context: android.content.Context) {
-    OutlinedButton(
-        onClick = { UpdateManager.checkExplicit(context) },
-        modifier = Modifier.fillMaxWidth(),
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(percent = 50))
+            .clickable { UpdateManager.checkExplicit(context) },
+        contentAlignment = Alignment.Center,
     ) {
-        Text("Проверить обновления")
+        Text(
+            "Проверить обновления",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 
@@ -260,7 +488,11 @@ private fun CheckButton(context: android.content.Context) {
 private fun RowStatus(text: String, spinning: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (spinning) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            CircularProgressIndicator(
+                Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary,
+            )
             Spacer(Modifier.size(10.dp))
         }
         Text(text, style = MaterialTheme.typography.bodyMedium)

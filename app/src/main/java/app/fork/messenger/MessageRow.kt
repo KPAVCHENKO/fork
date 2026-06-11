@@ -18,9 +18,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -50,17 +51,29 @@ fun MessageRow(
     val maxPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
 
     Box {
-        // Иконка ответа проявляется по мере свайпа.
-        Icon(
-            ForkIcons.Reply,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+        // Иконка ответа в круге проявляется и растёт по мере свайпа (Fork Design Spec §6).
+        val swipeProgress = (offsetX.value / triggerPx).coerceIn(0f, 1f)
+        Box(
             modifier = Modifier
                 .align(Alignment.CenterStart)
                 .padding(start = 12.dp)
-                .size(24.dp)
-                .alpha((offsetX.value / triggerPx).coerceIn(0f, 1f)),
-        )
+                .size(32.dp)
+                .graphicsLayer {
+                    alpha = swipeProgress
+                    scaleX = 0.5f + 0.5f * swipeProgress
+                    scaleY = 0.5f + 0.5f * swipeProgress
+                }
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                ForkIcons.Reply,
+                contentDescription = null,
+                tint = app.fork.messenger.ui.forkTokens.checkCyan,
+                modifier = Modifier.size(18.dp),
+            )
+        }
 
         Box(
             modifier = Modifier

@@ -30,12 +30,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.fork.messenger.ui.ForkIcons
+import app.fork.messenger.ui.TimestampStyle
+import app.fork.messenger.ui.forkTokens
 import coil.compose.AsyncImage
 import java.io.File
 import org.drinkless.tdlib.TdApi
@@ -68,9 +71,10 @@ fun MediaImage(
 
     Box(
         modifier
-            .widthIn(max = 248.dp)
+            .widthIn(max = 252.dp)
             .aspectRatio(aspect(width, height))
-            .clip(RoundedCornerShape(16.dp))
+            // Радиус медиа = радиус пузыря − 3dp (Fork Design Spec §4.3).
+            .clip(RoundedCornerShape(forkTokens.bubbleRadius - 3.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center,
@@ -128,28 +132,27 @@ fun VideoContent(video: TdApi.Video, onOpen: () -> Unit) {
                 onClick = onOpen,
             )
         }
-        // Кнопка воспроизведения по центру.
+        // Кнопка воспроизведения по центру — стеклянная капсула (Fork Design Spec §4.3).
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(48.dp)
                 .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.45f))
+                .background(Color(0x8C0E1424))
                 .clickable(onClick = onOpen),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(ForkIcons.Play, contentDescription = "играть", tint = Color.White, modifier = Modifier.size(30.dp))
+            Icon(ForkIcons.Play, contentDescription = "играть", tint = Color.White, modifier = Modifier.size(28.dp))
         }
         Text(
             text = formatDuration(video.duration),
             color = Color.White,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Medium,
+            style = TimestampStyle,
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(6.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color.Black.copy(alpha = 0.45f))
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .clip(RoundedCornerShape(percent = 50))
+                .background(Color(0x8C050912))
+                .padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
 }
@@ -181,9 +184,9 @@ fun AnimationContent(animation: TdApi.Animation) {
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(6.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color.Black.copy(alpha = 0.45f))
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .clip(RoundedCornerShape(percent = 50))
+                .background(Color(0x8C050912))
+                .padding(horizontal = 8.dp, vertical = 3.dp),
         )
     }
 }
@@ -191,6 +194,7 @@ fun AnimationContent(animation: TdApi.Animation) {
 @Composable
 fun VoiceContent(voice: TdApi.VoiceNote, mine: Boolean) {
     val context = LocalContext.current
+    val tokens = forkTokens
     val state = rememberFileState(voice.voice, autoDownload = true, priority = 30)
     val playback by AudioPlayer.state.collectAsStateWithLifecycle()
     val isThis = playback?.fileId == voice.voice.id
@@ -198,14 +202,23 @@ fun VoiceContent(voice: TdApi.VoiceNote, mine: Boolean) {
     val progress = if (isThis) playback?.progress ?: 0f else 0f
 
     val bars = remember(voice.waveform) { decodeWaveform(voice.waveform) }
-    val tint = if (mine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary
+    // На градиентном пузыре — белые элементы, на входящем — фирменный градиент.
+    val played = if (mine) listOf(Color.White) else tokens.waveformSteps
+    val rest = when {
+        mine -> Color.White.copy(alpha = 0.35f)
+        tokens.dark -> Color.White.copy(alpha = 0.25f)
+        else -> Color(0xFF171C26).copy(alpha = 0.2f)
+    }
 
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.widthIn(max = 240.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.widthIn(max = 248.dp)) {
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(42.dp)
                 .clip(CircleShape)
-                .background(tint)
+                .then(
+                    if (mine) Modifier.background(Color.White.copy(alpha = 0.22f))
+                    else Modifier.background(tokens.brandGradient),
+                )
                 .clickable {
                     val path = state.path
                     if (path != null) AudioPlayer.toggle(context, voice.voice.id, path)
@@ -215,39 +228,47 @@ fun VoiceContent(voice: TdApi.VoiceNote, mine: Boolean) {
             if (state.path == null && state.downloading) {
                 CircularProgressIndicator(
                     progress = { state.progress.coerceAtLeast(0.02f) },
-                    color = MaterialTheme.colorScheme.surface,
+                    color = Color.White,
                     modifier = Modifier.size(22.dp),
                 )
             } else {
                 Icon(
                     if (isPlaying) ForkIcons.Pause else ForkIcons.Play,
                     contentDescription = if (isPlaying) "пауза" else "играть",
-                    tint = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.size(24.dp),
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
         Spacer(Modifier.width(10.dp))
         Column {
-            Waveform(bars = bars, progress = progress, color = tint)
+            Waveform(bars = bars, progress = progress, played = played, rest = rest)
             Spacer(Modifier.height(4.dp))
+            val timeText = if (isThis && progress > 0f) {
+                "${formatDuration((voice.duration * progress).toInt())} / ${formatDuration(voice.duration)}"
+            } else {
+                formatDuration(voice.duration)
+            }
             Text(
-                formatDuration(voice.duration),
-                style = MaterialTheme.typography.labelSmall,
-                color = tint.copy(alpha = 0.8f),
+                timeText,
+                style = TimestampStyle,
+                color = if (mine) Color.White.copy(alpha = 0.75f)
+                else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
 }
 
+/**
+ * Дорожка голосового: прослушанная часть прокрашивается ступенями
+ * градиента индиго → циан (Fork Design Spec §7.5).
+ */
 @Composable
-private fun Waveform(bars: IntArray, progress: Float, color: Color) {
-    val played = color
-    val rest = color.copy(alpha = 0.3f)
+private fun Waveform(bars: IntArray, progress: Float, played: List<Color>, rest: Color) {
     Canvas(
         modifier = Modifier
             .width(160.dp)
-            .height(24.dp),
+            .height(26.dp),
     ) {
         if (bars.isEmpty()) return@Canvas
         val barWidth = size.width / (bars.size * 1.6f)
@@ -255,11 +276,16 @@ private fun Waveform(bars: IntArray, progress: Float, color: Color) {
         val progressX = size.width * progress
         var x = 0f
         for (h in bars) {
-            val norm = (h / 31f).coerceIn(0.08f, 1f)
+            val norm = (h / 31f).coerceIn(0.1f, 1f)
             val barHeight = size.height * norm
             val top = (size.height - barHeight) / 2
+            val color = if (x <= progressX) {
+                gradientStep(played, x / size.width)
+            } else {
+                rest
+            }
             drawRoundRect(
-                color = if (x <= progressX) played else rest,
+                color = color,
                 topLeft = androidx.compose.ui.geometry.Offset(x, top),
                 size = androidx.compose.ui.geometry.Size(barWidth, barHeight),
                 cornerRadius = CornerRadius(barWidth / 2, barWidth / 2),
@@ -269,48 +295,62 @@ private fun Waveform(bars: IntArray, progress: Float, color: Color) {
     }
 }
 
+/** Цвет ступени градиента в точке t (0..1) — плавная интерполяция между стопами. */
+private fun gradientStep(steps: List<Color>, t: Float): Color {
+    if (steps.size == 1) return steps[0]
+    val clamped = t.coerceIn(0f, 0.999f) * (steps.size - 1)
+    val i = clamped.toInt()
+    return lerp(steps[i], steps[minOf(i + 1, steps.size - 1)], clamped - i)
+}
+
 @Composable
-fun DocumentContent(document: TdApi.Document) {
+fun DocumentContent(document: TdApi.Document, mine: Boolean = false) {
     val state = rememberFileState(document.document, autoDownload = false, priority = 16)
     val context = LocalContext.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .widthIn(max = 240.dp)
+            .widthIn(max = 248.dp)
             .clickable {
                 state.path?.let { openExternally(context, it, document.mimeType) }
                     ?: FileHub.ensureDownloaded(document.document, 28)
             },
     ) {
+        // Иконка-сквиркл 42dp (Fork Design Spec §4.3).
         Box(
             modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary),
+                .size(42.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(
+                    if (mine) Color.White.copy(alpha = 0.22f)
+                    else MaterialTheme.colorScheme.primaryContainer,
+                ),
             contentAlignment = Alignment.Center,
         ) {
+            val iconTint = if (mine) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
             if (state.downloading) {
                 CircularProgressIndicator(
                     progress = { state.progress.coerceAtLeast(0.02f) },
-                    color = MaterialTheme.colorScheme.surface,
+                    color = iconTint,
                     modifier = Modifier.size(22.dp),
                 )
             } else {
-                Icon(ForkIcons.Download, contentDescription = null, tint = MaterialTheme.colorScheme.surface, modifier = Modifier.size(22.dp))
+                Icon(ForkIcons.Download, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
             }
         }
         Spacer(Modifier.width(10.dp))
         Column {
             Text(
                 document.fileName.ifBlank { "Файл" },
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
+                style = MaterialTheme.typography.titleSmall,
+                color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
             )
             Text(
                 formatBytes(document.document.size),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (mine) Color.White.copy(alpha = 0.75f)
+                else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

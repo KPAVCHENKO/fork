@@ -4,51 +4,58 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-
-
-
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -66,12 +73,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.fork.messenger.media.AnimationContent
 import app.fork.messenger.media.DocumentContent
@@ -82,19 +91,26 @@ import app.fork.messenger.media.PhotoContent
 import app.fork.messenger.media.StickerContent
 import app.fork.messenger.media.VideoContent
 import app.fork.messenger.media.VoiceContent
-import app.fork.messenger.SettingsStore
+import app.fork.messenger.ui.ForkAvatar
+import app.fork.messenger.ui.ForkEmptyState
+import app.fork.messenger.ui.ForkIcons
+import app.fork.messenger.ui.GlassPill
+import app.fork.messenger.ui.MessageTextStyle
+import app.fork.messenger.ui.TimestampStyle
+import app.fork.messenger.ui.forkTokens
 import app.fork.messenger.ui.senderColor
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 
-/** Экран переписки. */
+/** Экран переписки (Fork Design Spec §4.3). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     val messages by MessageStore.messages.collectAsStateWithLifecycle()
     val header by MessageStore.header.collectAsStateWithLifecycle()
     val loading by MessageStore.loadingHistory.collectAsStateWithLifecycle()
+    val tokens = forkTokens
 
     DisposableEffect(chatId) {
         MessageStore.open(chatId)
@@ -126,126 +142,177 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     }
 
     Box(Modifier.fillMaxSize()) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(app.fork.messenger.ui.ForkIcons.ArrowBack, contentDescription = "назад")
-                    }
-                },
-                title = {
-                    val h = header
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onOpenInfo(chatId) },
-                    ) {
-                        HeaderAvatar(h)
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                h?.title ?: "",
-                                fontWeight = FontWeight.SemiBold,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                ForkIcons.ArrowBack,
+                                contentDescription = "назад",
+                                tint = MaterialTheme.colorScheme.onSurface,
                             )
-                            if (h != null && h.subtitle.isNotBlank()) {
+                        }
+                    },
+                    title = {
+                        val h = header
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { onOpenInfo(chatId) },
+                        ) {
+                            if (h != null) {
+                                ForkAvatar(
+                                    size = 44.dp,
+                                    avatarPath = h.avatarPath,
+                                    initials = h.initials,
+                                    seed = h.colorSeed,
+                                    online = h.subtitle == "онлайн",
+                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Column {
                                 Text(
-                                    h.subtitle,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (h.subtitle == "онлайн") MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    h?.title ?: "",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                if (h != null && h.subtitle.isNotBlank()) {
+                                    val accent = h.subtitle == "онлайн" || h.subtitle.contains("печатает")
+                                    Text(
+                                        h.subtitle,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = if (accent) tokens.checkCyan
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                )
+            },
+            bottomBar = {
+                if (header?.canWrite != false) {
+                    MessageInput()
+                } else {
+                    ReadOnlyBar()
+                }
+            },
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                LazyColumn(
+                    state = listState,
+                    reverseLayout = true,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                ) {
+                    itemsIndexed(reversed, key = { _, m -> m.id }) { index, message ->
+                        val older = reversed.getOrNull(index + 1)
+                        Column {
+                            if (older == null || older.dateLabel != message.dateLabel) {
+                                DateCapsule(message.dateLabel)
+                            }
+                            MessageRow(message, onOpenMedia = { mediaTarget = it })
+                        }
+                    }
+                    if (loading) {
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(
+                                    Modifier.size(24.dp),
+                                    color = MaterialTheme.colorScheme.primary,
                                 )
                             }
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
-        },
-        bottomBar = {
-            if (header?.canWrite != false) {
-                MessageInput()
-            } else {
-                ReadOnlyBar()
-            }
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            LazyColumn(
-                state = listState,
-                reverseLayout = true,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    horizontal = 10.dp, vertical = 8.dp,
-                ),
-            ) {
-                items(reversed, key = { it.id }) { message ->
-                    MessageRow(message, onOpenMedia = { mediaTarget = it })
-                }
-                if (loading) {
-                    item {
-                        Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(Modifier.size(24.dp))
+                    if (!loading && reversed.isEmpty()) {
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(vertical = 96.dp), contentAlignment = Alignment.Center) {
+                                ForkEmptyState(title = "Напишите первым", iconSize = 72.dp)
+                            }
                         }
                     }
                 }
-            }
 
-            // Кнопка «вниз» появляется, когда прокрутили вверх.
-            val showScrollDown by remember {
-                derivedStateOf { listState.firstVisibleItemIndex > 3 }
-            }
-            if (showScrollDown) {
-                SmallFloatingActionButton(
-                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                // Кнопка «вниз» — стеклянная капсула 46dp (Fork Design Spec §4.3).
+                val showScrollDown by remember {
+                    derivedStateOf { listState.firstVisibleItemIndex > 3 }
+                }
+                AnimatedVisibility(
+                    visible = showScrollDown,
+                    enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.7f),
+                    exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.7f),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(16.dp),
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
-                    Icon(
-                        app.fork.messenger.ui.ForkIcons.Download,
-                        contentDescription = "вниз",
-                        modifier = Modifier.size(20.dp),
-                    )
+                    GlassPill(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clickable { scope.launch { listState.animateScrollToItem(0) } },
+                    ) {
+                        Icon(
+                            ForkIcons.Down,
+                            contentDescription = "вниз",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
                 }
             }
         }
-    }
 
-    // Свайп-назад от левого края экрана (как в Telegram), не мешает свайпу сообщений.
-    Box(
-        Modifier
-            .fillMaxHeight()
-            .width(24.dp)
-            .align(Alignment.CenterStart)
-            .pointerInput(Unit) {
-                var total = 0f
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        if (total > 56.dp.toPx()) onBack()
-                        total = 0f
-                    },
-                ) { change, drag ->
-                    change.consume()
-                    total += drag
-                }
-            },
-    )
+        // Свайп-назад от левого края экрана (как в Telegram), не мешает свайпу сообщений.
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .width(24.dp)
+                .align(Alignment.CenterStart)
+                .pointerInput(Unit) {
+                    var total = 0f
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (total > 56.dp.toPx()) onBack()
+                            total = 0f
+                        },
+                    ) { change, drag ->
+                        change.consume()
+                        total += drag
+                    }
+                },
+        )
 
-    mediaTarget?.let { target ->
-        MediaViewer(target = target, onClose = { mediaTarget = null })
+        mediaTarget?.let { target ->
+            MediaViewer(target = target, onClose = { mediaTarget = null })
+        }
     }
+}
+
+/** Дата-разделитель — стеклянная капсула по центру (Fork Design Spec §7.6). */
+@Composable
+private fun DateCapsule(label: String) {
+    if (label.isBlank()) return
+    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        GlassPill(shape = RoundedCornerShape(14.dp)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 5.dp),
+            )
+        }
     }
 }
 
 @Composable
 fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
+    val tokens = forkTokens
     val content = message.content
 
     // Стикеры показываем без пузыря.
@@ -259,80 +326,74 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
         return
     }
 
-    val bubbleColor =
-        if (message.isMine) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceContainerHigh
+    // Малый угол — у нижнего угла со стороны хвоста, только у последнего в группе.
+    val big = tokens.bubbleRadius
+    val small = tokens.bubbleRadiusSmall
     val shape = RoundedCornerShape(
-        topStart = 18.dp,
-        topEnd = 18.dp,
-        bottomStart = if (message.isMine) 18.dp else 6.dp,
-        bottomEnd = if (message.isMine) 6.dp else 18.dp,
+        topStart = big,
+        topEnd = big,
+        bottomStart = if (!message.isMine && message.isLastOfGroup) small else big,
+        bottomEnd = if (message.isMine && message.isLastOfGroup) small else big,
     )
+    val isText = content is TdApi.MessageText
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = if (message.isFirstOfGroup) 6.dp else 2.dp),
+            .padding(top = if (message.isFirstOfGroup) 10.dp else 4.dp),
         horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start,
     ) {
-        Surface(color = bubbleColor, shape = shape) {
-            Column(Modifier.widthIn(max = 300.dp).padding(6.dp)) {
+        Box(
+            modifier = Modifier
+                .clip(shape)
+                .then(
+                    if (message.isMine) {
+                        Modifier.background(tokens.brandGradient)
+                    } else {
+                        Modifier
+                            .background(tokens.bubbleIn)
+                            .border(1.dp, tokens.bubbleInBorder, shape)
+                    },
+                ),
+        ) {
+            Column(
+                Modifier
+                    .widthIn(max = 300.dp)
+                    .padding(
+                        if (isText) PaddingValues(horizontal = 13.dp, vertical = 8.dp)
+                        else PaddingValues(4.dp),
+                    ),
+            ) {
                 if (message.showSender && message.senderName != null) {
                     Text(
                         text = message.senderName,
                         style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
                         color = senderColor(message.senderSeed),
-                        modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 1.dp),
+                        modifier = Modifier.padding(
+                            horizontal = if (isText) 0.dp else 8.dp,
+                            vertical = 1.dp,
+                        ),
                     )
                     Spacer(Modifier.height(2.dp))
                 }
 
                 if (message.replyText != null) {
-                    ReplyQuote(message.replyText)
-                    Spacer(Modifier.height(2.dp))
+                    ReplyQuote(message.replyText, mine = message.isMine)
+                    Spacer(Modifier.height(4.dp))
                 }
 
-                BubbleMedia(content, onOpenMedia)
+                BubbleMedia(content, message.isMine, onOpenMedia)
 
                 val caption = captionText(content)
                 BubbleText(
                     text = if (caption != null) caption else message.text,
                     time = message.time,
                     status = message.outStatus,
-                    hasMediaAbove = content !is TdApi.MessageText,
-                    showText = content is TdApi.MessageText || caption != null,
+                    mine = message.isMine,
+                    hasMediaAbove = !isText,
+                    showText = isText || caption != null,
                 )
             }
-        }
-    }
-}
-
-/** Мини-аватар в шапке чата. */
-@Composable
-private fun HeaderAvatar(h: ChatHeader?) {
-    if (h == null) return
-    if (h.avatarPath != null) {
-        coil.compose.AsyncImage(
-            model = java.io.File(h.avatarPath),
-            contentDescription = null,
-            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-            modifier = Modifier.size(38.dp).clip(androidx.compose.foundation.shape.CircleShape),
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(app.fork.messenger.ui.avatarBrush(h.colorSeed)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                h.initials,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-            )
         }
     }
 }
@@ -340,7 +401,7 @@ private fun HeaderAvatar(h: ChatHeader?) {
 /** Плашка вместо ввода там, где писать нельзя (каналы, ограниченные группы). */
 @Composable
 private fun ReadOnlyBar() {
-    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -357,14 +418,19 @@ private fun ReadOnlyBar() {
     }
 }
 
-/** Цитата сообщения, на которое отвечают, внутри пузыря. */
+/** Цитата сообщения, на которое отвечают, внутри пузыря (Fork Design Spec §4.3). */
 @Composable
-private fun ReplyQuote(text: String) {
+private fun ReplyQuote(text: String, mine: Boolean) {
+    val tokens = forkTokens
+    val bg = when {
+        mine -> Color.White.copy(alpha = 0.18f)
+        tokens.dark -> Color.White.copy(alpha = 0.08f)
+        else -> Color.Black.copy(alpha = 0.05f)
+    }
     Row(
         modifier = Modifier
-            .padding(horizontal = 6.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg),
     ) {
         Box(
             Modifier
@@ -372,12 +438,13 @@ private fun ReplyQuote(text: String) {
                 .width(3.dp)
                 .height(34.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(MaterialTheme.colorScheme.primary),
+                .background(if (mine) Color.White else tokens.checkCyan),
         )
         Text(
             text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+            color = if (mine) Color.White.copy(alpha = 0.9f)
+            else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
@@ -387,13 +454,17 @@ private fun ReplyQuote(text: String) {
 
 /** Картиночная/медийная часть пузыря (если есть). */
 @Composable
-private fun BubbleMedia(content: TdApi.MessageContent?, onOpenMedia: (MediaTarget) -> Unit) {
+private fun BubbleMedia(
+    content: TdApi.MessageContent?,
+    mine: Boolean,
+    onOpenMedia: (MediaTarget) -> Unit,
+) {
     when (content) {
         is TdApi.MessagePhoto -> PhotoContent(content.photo) { onOpenMedia(MediaTarget.Photo(content.photo)) }
         is TdApi.MessageVideo -> VideoContent(content.video) { onOpenMedia(MediaTarget.Video(content.video)) }
         is TdApi.MessageAnimation -> AnimationContent(content.animation)
-        is TdApi.MessageVoiceNote -> VoiceContent(content.voiceNote, mine = false)
-        is TdApi.MessageDocument -> DocumentContent(content.document)
+        is TdApi.MessageVoiceNote -> VoiceContent(content.voiceNote, mine = mine)
+        is TdApi.MessageDocument -> DocumentContent(content.document, mine = mine)
         else -> Unit
     }
 }
@@ -402,7 +473,8 @@ private fun BubbleMedia(content: TdApi.MessageContent?, onOpenMedia: (MediaTarge
 private fun BubbleText(
     text: String,
     time: String,
-    status: app.fork.messenger.OutStatus,
+    status: OutStatus,
+    mine: Boolean,
     hasMediaAbove: Boolean,
     showText: Boolean,
 ) {
@@ -412,39 +484,42 @@ private fun BubbleText(
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
         ) {
             Spacer(Modifier.weight(1f))
-            TimeStatus(time, status)
+            TimeStatus(time, status, mine)
         }
         return
     }
     Row(
         verticalAlignment = Alignment.Bottom,
-        modifier = Modifier.padding(horizontal = 6.dp, vertical = if (hasMediaAbove) 4.dp else 2.dp),
+        modifier = Modifier.padding(
+            horizontal = if (hasMediaAbove) 8.dp else 0.dp,
+            vertical = if (hasMediaAbove) 4.dp else 0.dp,
+        ),
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MessageTextStyle,
+            color = if (mine) Color.White else forkTokens.bubbleTextIn,
             modifier = Modifier.weight(1f, fill = false),
         )
         Spacer(Modifier.padding(start = 8.dp))
-        TimeStatus(time, status)
+        TimeStatus(time, status, mine)
     }
 }
 
-/** Время + галочка статуса (для своих сообщений). */
+/** Время + галочки: циановые «прочитано», белые на градиенте (Fork Design Spec §7.7). */
 @Composable
-private fun TimeStatus(time: String, status: app.fork.messenger.OutStatus) {
+private fun TimeStatus(time: String, status: OutStatus, mine: Boolean) {
+    val tokens = forkTokens
+    val timeColor = if (mine) Color.White.copy(alpha = 0.75f)
+    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = time,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-        )
+        Text(text = time, style = TimestampStyle, color = timeColor)
         val icon = when (status) {
-            app.fork.messenger.OutStatus.SENDING -> app.fork.messenger.ui.ForkIcons.Clock
-            app.fork.messenger.OutStatus.SENT -> app.fork.messenger.ui.ForkIcons.Check
-            app.fork.messenger.OutStatus.READ -> app.fork.messenger.ui.ForkIcons.CheckDouble
-            app.fork.messenger.OutStatus.FAILED -> app.fork.messenger.ui.ForkIcons.Clock
-            app.fork.messenger.OutStatus.NONE -> null
+            OutStatus.SENDING -> ForkIcons.Clock
+            OutStatus.SENT -> ForkIcons.Check
+            OutStatus.READ -> ForkIcons.CheckDouble
+            OutStatus.FAILED -> ForkIcons.Clock
+            OutStatus.NONE -> null
         }
         if (icon != null) {
             Spacer(Modifier.width(3.dp))
@@ -452,9 +527,12 @@ private fun TimeStatus(time: String, status: app.fork.messenger.OutStatus) {
                 icon,
                 contentDescription = null,
                 modifier = Modifier.size(14.dp),
-                tint = if (status == app.fork.messenger.OutStatus.READ)
-                    MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                tint = when {
+                    status == OutStatus.FAILED -> MaterialTheme.colorScheme.error
+                    status == OutStatus.READ && mine -> Color.White
+                    status == OutStatus.READ -> tokens.checkCyan
+                    else -> timeColor
+                },
             )
         }
     }
@@ -522,7 +600,7 @@ private fun MessageInput() {
         }
     }
 
-    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
+    Surface(color = MaterialTheme.colorScheme.surface) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -533,85 +611,96 @@ private fun MessageInput() {
             if (reply != null) {
                 ReplyBar(reply!!)
             }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            IconButton(
-                onClick = {
-                    pickMedia.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-                    )
-                },
-                modifier = Modifier.size(48.dp),
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.Bottom,
             ) {
-                Icon(
-                    app.fork.messenger.ui.ForkIcons.Attach,
-                    contentDescription = "вложение",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            IconButton(
-                onClick = { showStickers = !showStickers },
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    app.fork.messenger.ui.ForkIcons.Sticker,
-                    contentDescription = "стикеры",
-                    tint = if (showStickers) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            TextField(
-                value = text,
-                onValueChange = { text = it },
-                placeholder = { Text("Сообщение") },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(24.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                ),
-                keyboardOptions = KeyboardOptions(
-                    imeAction = if (enterToSend) ImeAction.Send else ImeAction.Default,
-                ),
-                keyboardActions = KeyboardActions(onSend = { submit() }),
-                maxLines = 5,
-            )
-            Spacer(Modifier.padding(start = 6.dp))
-            if (text.isNotBlank()) {
-                FilledIconButton(
-                    onClick = { submit() },
-                    modifier = Modifier.size(48.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                    ),
+                // Капсула: скрепка + поле + стикеры (Fork Design Spec §4.3).
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 52.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                    verticalAlignment = Alignment.Bottom,
                 ) {
-                    Icon(
-                        app.fork.messenger.ui.ForkIcons.Send,
-                        contentDescription = "отправить",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                    )
+                    IconButton(
+                        onClick = {
+                            pickMedia.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+                            )
+                        },
+                        modifier = Modifier.size(52.dp),
+                    ) {
+                        Icon(
+                            ForkIcons.Attach,
+                            contentDescription = "вложение",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(21.dp),
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .padding(top = 14.dp, bottom = 14.dp),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        if (text.isEmpty()) {
+                            Text(
+                                "Сообщение",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            )
+                        }
+                        BasicTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            keyboardOptions = KeyboardOptions(
+                                imeAction = if (enterToSend) ImeAction.Send else ImeAction.Default,
+                            ),
+                            keyboardActions = KeyboardActions(onSend = { submit() }),
+                            maxLines = 5,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    IconButton(
+                        onClick = { showStickers = !showStickers },
+                        modifier = Modifier.size(52.dp),
+                    ) {
+                        Icon(
+                            ForkIcons.Sticker,
+                            contentDescription = "стикеры",
+                            tint = if (showStickers) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(21.dp),
+                        )
+                    }
                 }
-            } else {
-                VoiceButton(context)
+                Spacer(Modifier.width(8.dp))
+                SendMicButton(hasText = text.isNotBlank(), onSend = { submit() }, context = context)
             }
-        }
-        if (showStickers) {
-            app.fork.messenger.media.StickerPanel(onPick = { sticker ->
-                MessageStore.sendSticker(sticker)
-            })
-        }
+            if (showStickers) {
+                app.fork.messenger.media.StickerPanel(onPick = { sticker ->
+                    MessageStore.sendSticker(sticker)
+                })
+            }
         }
     }
 }
 
-/** Кнопка-микрофон: удерживай для записи голосового, отпусти — отправить. */
+/**
+ * Круглая кнопка 52dp: микрофон ⇄ отправка с пружинным морфом (Fork Design Spec §7.4).
+ * Удержание микрофона — запись голосового, кнопка растёт ×1.6.
+ */
 @Composable
-private fun VoiceButton(context: android.content.Context) {
+private fun SendMicButton(hasText: Boolean, onSend: () -> Unit, context: android.content.Context) {
+    val tokens = forkTokens
     val recording by app.fork.messenger.media.VoiceRecorder.recording.collectAsStateWithLifecycle()
     var hasPermission by remember {
         mutableStateOf(
@@ -624,35 +713,76 @@ private fun VoiceButton(context: android.content.Context) {
         ActivityResultContracts.RequestPermission(),
     ) { granted -> hasPermission = granted }
 
-    FilledIconButton(
-        onClick = {},
+    // Пульс при морфе микрофон ⇄ отправка.
+    val morphScale = remember { Animatable(1f) }
+    LaunchedEffect(hasText) {
+        morphScale.snapTo(0.88f)
+        morphScale.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium))
+    }
+    // Рост кнопки при записи голосового.
+    val recordScale by animateFloatAsState(
+        targetValue = if (recording) 1.6f else 1f,
+        animationSpec = spring(dampingRatio = 0.7f),
+        label = "recordScale",
+    )
+
+    Box(
         modifier = Modifier
-            .size(48.dp)
-            .pointerInput(hasPermission) {
-                detectTapGestures(
-                    onLongPress = {},
-                    onPress = {
-                        if (!hasPermission) {
-                            askPermission.launch(android.Manifest.permission.RECORD_AUDIO)
-                            return@detectTapGestures
-                        }
-                        val started = app.fork.messenger.media.VoiceRecorder.start(context)
-                        if (started) {
-                            tryAwaitRelease()
-                            app.fork.messenger.media.VoiceRecorder.stopAndSend()
-                        }
-                    },
-                )
-            },
-        colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = if (recording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-        ),
+            .size(52.dp)
+            .graphicsLayer {
+                val s = morphScale.value * recordScale
+                scaleX = s
+                scaleY = s
+            }
+            .clip(CircleShape)
+            .then(
+                when {
+                    recording -> Modifier.background(MaterialTheme.colorScheme.error)
+                    hasText -> Modifier.background(tokens.brandGradient)
+                    else -> Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                },
+            )
+            .then(
+                if (hasText) {
+                    Modifier.clickable(onClick = onSend)
+                } else {
+                    Modifier.pointerInput(hasPermission) {
+                        detectTapGestures(
+                            onLongPress = {},
+                            onPress = {
+                                if (!hasPermission) {
+                                    askPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+                                    return@detectTapGestures
+                                }
+                                val started = app.fork.messenger.media.VoiceRecorder.start(context)
+                                if (started) {
+                                    tryAwaitRelease()
+                                    app.fork.messenger.media.VoiceRecorder.stopAndSend()
+                                }
+                            },
+                        )
+                    }
+                },
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            app.fork.messenger.ui.ForkIcons.Mic,
-            contentDescription = "записать голосовое",
-            tint = MaterialTheme.colorScheme.onPrimary,
-        )
+        Crossfade(targetState = hasText || recording, animationSpec = tween(120), label = "micSend") { active ->
+            if (active && hasText) {
+                Icon(
+                    ForkIcons.Send,
+                    contentDescription = "отправить",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp),
+                )
+            } else {
+                Icon(
+                    ForkIcons.Mic,
+                    contentDescription = "записать голосовое",
+                    tint = if (recording) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
     }
 }
 
@@ -663,6 +793,7 @@ data class PendingMedia(val path: String, val isVideo: Boolean, val width: Int, 
 @Composable
 private fun MediaPreviewDialog(media: PendingMedia, onCancel: () -> Unit, onSend: (String) -> Unit) {
     var caption by rememberSaveable { mutableStateOf("") }
+    val tokens = forkTokens
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onCancel,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
@@ -675,7 +806,7 @@ private fun MediaPreviewDialog(media: PendingMedia, onCancel: () -> Unit, onSend
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(
-                        app.fork.messenger.ui.ForkIcons.Play,
+                        ForkIcons.Play,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(64.dp),
@@ -684,6 +815,7 @@ private fun MediaPreviewDialog(media: PendingMedia, onCancel: () -> Unit, onSend
                     Text(
                         "Видео · ${app.fork.messenger.media.formatDuration(media.duration)}",
                         color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             } else {
@@ -702,7 +834,7 @@ private fun MediaPreviewDialog(media: PendingMedia, onCancel: () -> Unit, onSend
                     .windowInsetsPadding(WindowInsets.systemBars)
                     .padding(4.dp),
             ) {
-                Icon(app.fork.messenger.ui.ForkIcons.Close, contentDescription = "отмена", tint = Color.White)
+                Icon(ForkIcons.Close, contentDescription = "отмена", tint = Color.White)
             }
 
             // Подпись + отправить
@@ -714,30 +846,45 @@ private fun MediaPreviewDialog(media: PendingMedia, onCancel: () -> Unit, onSend
                     .padding(8.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                TextField(
-                    value = caption,
-                    onValueChange = { caption = it },
-                    placeholder = { Text("Добавить подпись…") },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = TextFieldDefaults.colors(
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                    ),
-                    maxLines = 3,
-                )
-                Spacer(Modifier.width(6.dp))
-                FilledIconButton(
-                    onClick = { onSend(caption) },
-                    modifier = Modifier.size(48.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                    ),
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 52.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    if (caption.isEmpty()) {
+                        Text(
+                            "Добавить подпись…",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.White.copy(alpha = 0.6f),
+                        )
+                    }
+                    BasicTextField(
+                        value = caption,
+                        onValueChange = { caption = it },
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.White),
+                        cursorBrush = SolidColor(Color.White),
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(tokens.brandGradient)
+                        .clickable { onSend(caption) },
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        app.fork.messenger.ui.ForkIcons.Send,
+                        ForkIcons.Send,
                         contentDescription = "отправить",
-                        tint = MaterialTheme.colorScheme.onPrimary,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
@@ -747,11 +894,12 @@ private fun MediaPreviewDialog(media: PendingMedia, onCancel: () -> Unit, onSend
 
 /** Панель «отвечаю на …» над полем ввода. */
 @Composable
-private fun ReplyBar(reply: app.fork.messenger.ReplyDraft) {
+private fun ReplyBar(reply: ReplyDraft) {
+    val tokens = forkTokens
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 4.dp, top = 6.dp),
+            .padding(start = 14.dp, end = 4.dp, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -759,15 +907,14 @@ private fun ReplyBar(reply: app.fork.messenger.ReplyDraft) {
                 .width(3.dp)
                 .height(34.dp)
                 .clip(RoundedCornerShape(2.dp))
-                .background(MaterialTheme.colorScheme.primary),
+                .background(tokens.checkCyan),
         )
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 "Ответ ${reply.sender?.let { "· $it" } ?: ""}",
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
+                color = tokens.checkCyan,
             )
             Text(
                 reply.preview,
@@ -779,7 +926,7 @@ private fun ReplyBar(reply: app.fork.messenger.ReplyDraft) {
         }
         IconButton(onClick = { MessageStore.clearReply() }) {
             Icon(
-                app.fork.messenger.ui.ForkIcons.Close,
+                ForkIcons.Close,
                 contentDescription = "отменить ответ",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
