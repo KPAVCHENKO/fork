@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,7 +57,7 @@ import org.drinkless.tdlib.TdApi
 /** Профиль чата или пользователя: аватар, имя, @имя, телефон, статус, без звука. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatInfoScreen(chatId: Long, onBack: () -> Unit) {
+fun ChatInfoScreen(chatId: Long, onBack: () -> Unit, onOpenChat: (Long) -> Unit = {}) {
     BackHandler(onBack = onBack)
     val revision by ChatStore.revision.collectAsStateWithLifecycle()
     val chat = remember(chatId, revision) { ChatStore.chat(chatId) }
@@ -151,6 +152,8 @@ fun ChatInfoScreen(chatId: Long, onBack: () -> Unit) {
 
             MuteRow(chat)
 
+            MembersSection(chat = chat, onOpenChat = onOpenChat)
+
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()
             SharedMediaSection(chatId = chatId, onOpenMedia = { mediaTarget = it })
@@ -161,6 +164,89 @@ fun ChatInfoScreen(chatId: Long, onBack: () -> Unit) {
 
     mediaTarget?.let { target ->
         app.fork.messenger.media.MediaViewer(target = target, onClose = { mediaTarget = null })
+    }
+}
+
+/** Участники группы (для каналов список обычно скрыт сервером — тогда секции нет). */
+@Composable
+private fun MembersSection(chat: TdApi.Chat, onOpenChat: (Long) -> Unit) {
+    var memberIds by remember(chat.id) { mutableStateOf<List<Long>>(emptyList()) }
+    val revision by ChatStore.revision.collectAsStateWithLifecycle()
+
+    LaunchedEffect(chat.id) {
+        when (val type = chat.type) {
+            is TdApi.ChatTypeBasicGroup ->
+                TdClient.send(TdApi.GetBasicGroupFullInfo(type.basicGroupId)) { result ->
+                    if (result is TdApi.BasicGroupFullInfo) {
+                        memberIds = result.members.orEmpty()
+                            .mapNotNull { (it.memberId as? TdApi.MessageSenderUser)?.userId }
+                    }
+                }
+            is TdApi.ChatTypeSupergroup ->
+                TdClient.send(TdApi.GetSupergroupMembers(type.supergroupId, null, 0, 200)) { result ->
+                    if (result is TdApi.ChatMembers) {
+                        memberIds = result.members.orEmpty()
+                            .mapNotNull { (it.memberId as? TdApi.MessageSenderUser)?.userId }
+                    }
+                }
+            else -> Unit
+        }
+    }
+
+    if (memberIds.isEmpty()) return
+
+    Spacer(Modifier.height(12.dp))
+    HorizontalDivider()
+    Text(
+        "Участники: ${memberIds.size}",
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+    )
+    // revision: имена достраиваются по мере ответов GetUser.
+    remember(revision) { revision }
+    Column(Modifier.fillMaxWidth()) {
+        memberIds.take(200).forEach { userId ->
+            val user = UserCache.user(userId)
+            val name = if (user != null) {
+                listOf(user.firstName, user.lastName).filter { it.isNotBlank() }
+                    .joinToString(" ").ifBlank { "Без имени" }
+            } else {
+                UserCache.firstName(userId) // дозапросит пользователя
+                "…"
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { ContactsStore.openChat(userId) { onOpenChat(it) } }
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                app.fork.messenger.ui.ForkAvatar(
+                    size = 42.dp,
+                    avatarPath = null,
+                    initials = MessageFormat.initials(name),
+                    seed = userId,
+                    online = UserCache.isOnline(userId),
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        UserCache.statusText(userId),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 

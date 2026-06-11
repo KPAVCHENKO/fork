@@ -140,7 +140,11 @@ private fun MainNavigation() {
             onOpenChat = { showArchive = false; openChatId = it },
         )
         showSettings -> SettingsScreen(onBack = { showSettings = false })
-        info != null -> ChatInfoScreen(chatId = info, onBack = { infoChatId = null })
+        info != null -> ChatInfoScreen(
+            chatId = info,
+            onBack = { infoChatId = null },
+            onOpenChat = { infoChatId = null; openChatId = it },
+        )
         chatId != null -> ChatScreen(
             chatId = chatId,
             onBack = { openChatId = null },

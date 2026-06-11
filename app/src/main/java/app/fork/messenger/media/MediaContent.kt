@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,7 +24,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -359,6 +362,115 @@ fun DocumentContent(document: TdApi.Document, mine: Boolean = false) {
 @Composable
 fun StickerContent(sticker: TdApi.Sticker) {
     StickerView(sticker, modifier = Modifier.size(140.dp), play = true)
+}
+
+/**
+ * Видеосообщение-«кружок»: превью с кнопкой, по тапу играет в круге со звуком.
+ * Плеер создаётся ТОЛЬКО на время воспроизведения (урок ANR со стикерами).
+ */
+@Composable
+fun VideoNoteContent(note: TdApi.VideoNote) {
+    val state = rememberFileState(note.video, autoDownload = true, priority = 26)
+    var playing by remember(note.video.id) { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .size(216.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable {
+                val path = state.path
+                if (path != null) playing = !playing else FileHub.ensureDownloaded(note.video, 30)
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        val path = state.path
+        if (playing && path != null) {
+            CircleVideoPlayer(path = path, onEnded = { playing = false })
+        } else {
+            val miniBitmap = remember(note.minithumbnail) {
+                note.minithumbnail?.data?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+            }
+            val thumbState = rememberFileState(note.thumbnail?.file, autoDownload = true, priority = 20)
+            if (miniBitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = miniBitmap.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+            thumbState.path?.let {
+                AsyncImage(
+                    model = File(it),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+            }
+            if (state.path == null && state.downloading) {
+                CircularProgressIndicator(
+                    progress = { state.progress.coerceAtLeast(0.02f) },
+                    color = Color.White,
+                    modifier = Modifier.size(40.dp),
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x8C0E1424)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(ForkIcons.Play, contentDescription = "играть", tint = Color.White, modifier = Modifier.size(30.dp))
+                }
+            }
+        }
+        Text(
+            text = formatDuration(note.duration),
+            color = Color.White,
+            style = TimestampStyle,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(10.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(Color(0x8C050912))
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+    }
+}
+
+@OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun CircleVideoPlayer(path: String, onEnded: () -> Unit) {
+    val context = LocalContext.current
+    val player = remember(path) {
+        androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
+            setMediaItem(androidx.media3.common.MediaItem.fromUri(android.net.Uri.fromFile(File(path))))
+            prepare()
+            playWhenReady = true
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(player) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == androidx.media3.common.Player.STATE_ENDED) onEnded()
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.release() }
+    }
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { ctx ->
+            androidx.media3.ui.PlayerView(ctx).apply {
+                this.player = player
+                useController = false
+                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 // ---------- утилиты ----------

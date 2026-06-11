@@ -609,13 +609,22 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
     val tokens = forkTokens
     val content = message.content
 
-    // Стикеры показываем без пузыря.
+    // Стикеры и видеокружки показываем без пузыря.
     if (content is TdApi.MessageSticker) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
             horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start,
         ) {
             StickerContent(content.sticker)
+        }
+        return
+    }
+    if (content is TdApi.MessageVideoNote) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start,
+        ) {
+            app.fork.messenger.media.VideoNoteContent(content.videoNote)
         }
         return
     }
