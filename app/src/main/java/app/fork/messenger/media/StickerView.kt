@@ -33,6 +33,25 @@ import org.drinkless.tdlib.TdApi
  * - WEBM — видео-стикер (ExoPlayer, зацикленный, без звука).
  * Используется и в сообщениях, и в панели стикеров.
  */
+/**
+ * Лёгкое СТАТИЧНОЕ превью стикера для сеток (панель стикеров): только картинка-
+ * миниатюра через Coil, без ExoPlayer/Lottie. Так панель из сотен стикеров не
+ * плодит плееры и не вешает систему (ANR). Анимация — только в сообщении.
+ */
+@Composable
+fun StickerThumb(sticker: TdApi.Sticker, modifier: Modifier = Modifier) {
+    // У статичных (WEBP) показываем сам стикер; у TGS/WEBM — статичную миниатюру.
+    val file = if (sticker.format is TdApi.StickerFormatWebp) sticker.sticker
+    else (sticker.thumbnail?.file ?: sticker.sticker)
+    val state = rememberFileState(file, autoDownload = true, priority = 14)
+    val path = state.path
+    Box(modifier, contentAlignment = Alignment.Center) {
+        if (path != null) {
+            AsyncImage(model = File(path), contentDescription = sticker.emoji)
+        }
+    }
+}
+
 @Composable
 fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boolean = true) {
     val state = rememberFileState(sticker.sticker, autoDownload = true, priority = 24)

@@ -62,7 +62,8 @@ fun StickerPanel(onPick: (TdApi.Sticker) -> Unit) {
                             .clickable { onPick(item.sticker) }
                             .padding(6.dp),
                     ) {
-                        StickerView(item.sticker, modifier = Modifier.fillMaxWidth(), play = true)
+                        // Статичное превью — без анимации, чтобы сетка не вешала систему.
+                        StickerThumb(item.sticker, modifier = Modifier.fillMaxWidth())
                     }
                 }
             }
