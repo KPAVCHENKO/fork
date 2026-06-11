@@ -142,6 +142,13 @@ fun MessageRow(
                         },
                     )
                 }
+                DropdownMenuItem(
+                    text = { Text(if (message.isPinned) "Открепить" else "Закрепить") },
+                    onClick = {
+                        MessageStore.togglePinMessage(message.id, !message.isPinned)
+                        menuOpen = false
+                    },
+                )
                 if (message.canDeleteForAll) {
                     DropdownMenuItem(
                         text = { Text("Удалить у всех") },

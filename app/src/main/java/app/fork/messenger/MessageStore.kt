@@ -23,6 +23,7 @@ data class UiMessage(
     val canDeleteForAll: Boolean,
     val outStatus: OutStatus,
     val isEdited: Boolean = false,
+    val isPinned: Boolean = false,
     val reactions: List<UiReaction> = emptyList(),
 )
 
@@ -34,6 +35,9 @@ data class UiReaction(val emoji: String, val count: Int, val chosen: Boolean)
 
 /** Черновик ответа: на какое сообщение отвечаем и как его показать в превью. */
 data class ReplyDraft(val messageId: Long, val preview: String, val sender: String?)
+
+/** Закреплённое сообщение для плашки в шапке чата. */
+data class PinnedBar(val messageId: Long, val text: String)
 
 /** Режим редактирования своего сообщения. */
 data class EditDraft(val messageId: Long, val text: String)
@@ -79,6 +83,9 @@ object MessageStore {
     private val _reply = MutableStateFlow<ReplyDraft?>(null)
     val reply: StateFlow<ReplyDraft?> = _reply.asStateFlow()
 
+    private val _pinned = MutableStateFlow<PinnedBar?>(null)
+    val pinned: StateFlow<PinnedBar?> = _pinned.asStateFlow()
+
     private var historyEnded = false
 
     fun open(id: Long) {
@@ -108,7 +115,30 @@ object MessageStore {
 
         app.fork.messenger.notify.NotificationsCenter.clearForChat(id)
         TdClient.send(TdApi.OpenChat(id))
+        _pinned.value = null
+        refreshPinned(id)
         loadMore()
+    }
+
+    /** Подтягивает последнее закреплённое сообщение чата (404 = закрепа нет). */
+    private fun refreshPinned(id: Long) {
+        TdClient.send(TdApi.GetChatPinnedMessage(id)) { result ->
+            if (synchronized(lock) { chatId } != id) return@send
+            _pinned.value = (result as? TdApi.Message)?.let {
+                PinnedBar(it.id, MessageFormat.contentText(it.content))
+            }
+        }
+    }
+
+    /** Закрепляет/открепляет сообщение в текущем чате. */
+    fun togglePinMessage(messageId: Long, pin: Boolean) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        if (pin) {
+            TdClient.send(TdApi.PinChatMessage(id, messageId, true, false))
+        } else {
+            TdClient.send(TdApi.UnpinChatMessage(id, messageId))
+        }
     }
 
     fun isViewing(id: Long): Boolean = synchronized(lock) { chatId == id }
@@ -415,6 +445,14 @@ object MessageStore {
                 }
                 rebuild()
             }
+
+            is TdApi.UpdateMessageIsPinned -> ifCurrent(obj.chatId) {
+                synchronized(lock) {
+                    msgs.firstOrNull { it.id == obj.messageId }?.isPinned = obj.isPinned
+                }
+                refreshPinned(obj.chatId)
+                rebuild()
+            }
         }
     }
 
@@ -466,6 +504,7 @@ object MessageStore {
                     else -> OutStatus.SENT
                 },
                 isEdited = m.editDate > 0,
+                isPinned = m.isPinned,
                 reactions = m.interactionInfo?.reactions?.reactions?.mapNotNull { r ->
                     val e = (r.type as? TdApi.ReactionTypeEmoji)?.emoji ?: return@mapNotNull null
                     UiReaction(e, r.totalCount, r.isChosen)

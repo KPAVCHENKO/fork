@@ -206,7 +206,18 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                 }
             },
         ) { padding ->
-            Box(Modifier.fillMaxSize().padding(padding)) {
+            Column(Modifier.fillMaxSize().padding(padding)) {
+                val pinned by MessageStore.pinned.collectAsStateWithLifecycle()
+                pinned?.let { pin ->
+                    PinnedMessageBar(
+                        text = pin.text,
+                        onClick = {
+                            val idx = reversed.indexOfFirst { it.id == pin.messageId }
+                            if (idx >= 0) scope.launch { listState.animateScrollToItem(idx) }
+                        },
+                    )
+                }
+                Box(Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
                     reverseLayout = true,
@@ -245,7 +256,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                 val showScrollDown by remember {
                     derivedStateOf { listState.firstVisibleItemIndex > 3 }
                 }
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = showScrollDown,
                     enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.7f),
                     exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.7f),
@@ -265,6 +276,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                             modifier = Modifier.size(22.dp),
                         )
                     }
+                }
                 }
             }
         }
@@ -292,6 +304,50 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
         mediaTarget?.let { target ->
             MediaViewer(target = target, onClose = { mediaTarget = null })
         }
+    }
+}
+
+/** Плашка закреплённого сообщения под шапкой чата (как в Telegram). */
+@Composable
+private fun PinnedMessageBar(text: String, onClick: () -> Unit) {
+    val tokens = forkTokens
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .width(3.dp)
+                .height(32.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(tokens.brandGradient),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Закреплённое сообщение",
+                style = MaterialTheme.typography.labelMedium,
+                color = tokens.checkCyan,
+            )
+            Text(
+                text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            ForkIcons.PushPin,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
@@ -395,6 +451,14 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
                     showText = isText || caption != null,
                 )
 
+                // Превью ссылки (как в Telegram): сайт, заголовок, описание, картинка.
+                if (content is TdApi.MessageText) {
+                    content.linkPreview?.let { lp ->
+                        Spacer(Modifier.height(6.dp))
+                        LinkPreviewCard(lp, mine = message.isMine, onOpenMedia = onOpenMedia)
+                    }
+                }
+
                 if (message.reactions.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
                     ReactionChips(message.id, message.reactions, mine = message.isMine)
@@ -488,6 +552,87 @@ private fun ReplyQuote(text: String, mine: Boolean) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
         )
+    }
+}
+
+/** Карточка превью ссылки внутри пузыря: акцентная полоса, сайт, заголовок, описание, фото. */
+@Composable
+private fun LinkPreviewCard(
+    preview: TdApi.LinkPreview,
+    mine: Boolean,
+    onOpenMedia: (MediaTarget) -> Unit,
+) {
+    val tokens = forkTokens
+    val context = LocalContext.current
+    val bg = when {
+        mine -> Color.White.copy(alpha = 0.16f)
+        tokens.dark -> Color.White.copy(alpha = 0.07f)
+        else -> Color.Black.copy(alpha = 0.04f)
+    }
+    val accent = if (mine) Color.White else tokens.checkCyan
+    Row(
+        modifier = Modifier
+            .height(androidx.compose.foundation.layout.IntrinsicSize.Min)
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .clickable {
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse(preview.url),
+                        ),
+                    )
+                }
+            },
+    ) {
+        Box(
+            Modifier
+                .padding(vertical = 6.dp)
+                .width(3.dp)
+                .fillMaxHeight()
+                .defaultMinSize(minHeight = 34.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(accent),
+        )
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+            if (preview.siteName.isNotBlank()) {
+                Text(
+                    preview.siteName,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (preview.title.isNotBlank()) {
+                Text(
+                    preview.title,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    ),
+                    color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val description = preview.description?.text.orEmpty()
+            if (description.isNotBlank()) {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (mine) Color.White.copy(alpha = 0.85f)
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val photo = (preview.type as? TdApi.LinkPreviewTypeArticle)?.photo
+            if (photo != null) {
+                Spacer(Modifier.height(6.dp))
+                PhotoContent(photo) { onOpenMedia(MediaTarget.Photo(photo)) }
+            }
+        }
     }
 }
 
