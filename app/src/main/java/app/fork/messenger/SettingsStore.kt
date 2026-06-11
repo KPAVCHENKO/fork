@@ -40,6 +40,40 @@ object SettingsStore {
     private val _enterToSend = MutableStateFlow(false)
     val enterToSend: StateFlow<Boolean> = _enterToSend.asStateFlow()
 
+    // ---------- Обои чата (Fork Design Spec §3.8) ----------
+
+    /** Обои по умолчанию для всех чатов. */
+    private val _defaultWallpaper = MutableStateFlow("glow")
+    val defaultWallpaper: StateFlow<String> = _defaultWallpaper.asStateFlow()
+
+    /** Затемнение узора 0..0.6. */
+    private val _wallpaperDim = MutableStateFlow(0f)
+    val wallpaperDim: StateFlow<Float> = _wallpaperDim.asStateFlow()
+
+    /** Версия per-chat карты обоев — для перерисовки после смены. */
+    private val _wallpaperRevision = MutableStateFlow(0)
+    val wallpaperRevision: StateFlow<Int> = _wallpaperRevision.asStateFlow()
+
+    /** Обои конкретного чата (или дефолтные). */
+    fun wallpaperFor(chatId: Long): String =
+        prefs.getString("wallpaper_$chatId", null) ?: _defaultWallpaper.value
+
+    fun setChatWallpaper(chatId: Long, id: String) {
+        prefs.edit().putString("wallpaper_$chatId", id).apply()
+        _wallpaperRevision.value++
+    }
+
+    fun setDefaultWallpaper(id: String) {
+        _defaultWallpaper.value = id
+        prefs.edit().putString("wallpaper_default", id).apply()
+        _wallpaperRevision.value++
+    }
+
+    fun setWallpaperDim(dim: Float) {
+        _wallpaperDim.value = dim.coerceIn(0f, 0.6f)
+        prefs.edit().putFloat("wallpaper_dim", _wallpaperDim.value).apply()
+    }
+
     fun init(context: Context) {
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         _theme.value = runCatching { ThemeMode.valueOf(prefs.getString(KEY_THEME, "SYSTEM")!!) }.getOrDefault(ThemeMode.SYSTEM)
@@ -48,6 +82,8 @@ object SettingsStore {
         _dynamicColors.value = prefs.getBoolean(KEY_DYNAMIC, false)
         _notificationsEnabled.value = prefs.getBoolean(KEY_NOTIFICATIONS, true)
         _enterToSend.value = prefs.getBoolean(KEY_ENTER_SEND, false)
+        _defaultWallpaper.value = prefs.getString("wallpaper_default", "glow") ?: "glow"
+        _wallpaperDim.value = prefs.getFloat("wallpaper_dim", 0f)
     }
 
     fun setTheme(mode: ThemeMode) {

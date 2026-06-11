@@ -126,6 +126,17 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     val selection = remember(chatId) { androidx.compose.runtime.mutableStateListOf<Long>() }
     val selectionMode = selection.isNotEmpty()
 
+    // Обои чата (Fork Design Spec §3.8).
+    val wallpaperRevision by SettingsStore.wallpaperRevision.collectAsStateWithLifecycle()
+    val defaultWallpaper by SettingsStore.defaultWallpaper.collectAsStateWithLifecycle()
+    val wallpaper = remember(chatId, wallpaperRevision, defaultWallpaper) {
+        app.fork.messenger.ui.ChatWallpaper.byId(SettingsStore.wallpaperFor(chatId))
+    }
+    val wallpaperDim by SettingsStore.wallpaperDim.collectAsStateWithLifecycle()
+    val amoled by SettingsStore.amoled.collectAsStateWithLifecycle()
+    var showWallpaperSheet by remember { mutableStateOf(false) }
+    var topMenuOpen by remember { mutableStateOf(false) }
+
     BackHandler {
         when {
             selectionMode -> selection.clear()
@@ -274,6 +285,28 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                     tint = MaterialTheme.colorScheme.onSurface,
                                 )
                             }
+                            Box {
+                                IconButton(onClick = { topMenuOpen = true }) {
+                                    Icon(
+                                        ForkIcons.MoreVert,
+                                        contentDescription = "меню",
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                    )
+                                }
+                                androidx.compose.material3.DropdownMenu(
+                                    expanded = topMenuOpen,
+                                    onDismissRequest = { topMenuOpen = false },
+                                ) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Фон чата") },
+                                        onClick = { topMenuOpen = false; showWallpaperSheet = true },
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Профиль") },
+                                        onClick = { topMenuOpen = false; onOpenInfo(chatId) },
+                                    )
+                                }
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -322,6 +355,20 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                     return@Column
                 }
                 Box(Modifier.fillMaxSize()) {
+                // Обои — слой между фоном и лентой; кроссфейд 250ms при смене.
+                androidx.compose.animation.Crossfade(
+                    targetState = wallpaper,
+                    animationSpec = tween(250),
+                    label = "wallpaper",
+                ) { wp ->
+                    app.fork.messenger.ui.ChatWallpaperCanvas(
+                        wallpaper = wp,
+                        dark = tokens.dark,
+                        amoled = amoled,
+                        dim = wallpaperDim,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
                 LazyColumn(
                     state = listState,
                     reverseLayout = true,
@@ -422,6 +469,10 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
 
         mediaTarget?.let { target ->
             MediaViewer(target = target, onClose = { mediaTarget = null })
+        }
+
+        if (showWallpaperSheet) {
+            WallpaperSheet(chatId = chatId, onDismiss = { showWallpaperSheet = false })
         }
     }
 }

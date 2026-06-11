@@ -58,10 +58,14 @@ fun SettingsScreen(onBack: () -> Unit) {
     val myName by TdClient.myName.collectAsStateWithLifecycle()
     val updateState by UpdateManager.state.collectAsStateWithLifecycle()
     var showSessions by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showWallpapers by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     if (showSessions) {
         SessionsScreen(onBack = { showSessions = false })
         return
+    }
+    if (showWallpapers) {
+        WallpaperSheet(chatId = null, onDismiss = { showWallpapers = false })
     }
     BackHandler(onBack = onBack)
 
@@ -115,7 +119,25 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
 
             SectionLabel("Оформление")
-            SettingsCard { AppearanceSection() }
+            SettingsCard {
+                AppearanceSection()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showWallpapers = true }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Фон чатов", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Обои по умолчанию для всех чатов",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
 
             SectionLabel("Уведомления и поведение")
             SettingsCard { BehaviorSection(context) }
