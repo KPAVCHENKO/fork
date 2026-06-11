@@ -3,10 +3,13 @@ package app.fork.messenger
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -26,8 +30,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,7 +45,9 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.fork.messenger.media.inlineSize
 import app.fork.messenger.ui.avatarBrush
 import coil.compose.AsyncImage
 import java.io.File
@@ -62,6 +70,7 @@ fun ChatInfoScreen(chatId: Long, onBack: () -> Unit) {
     val userId = (chat.type as? TdApi.ChatTypePrivate)?.userId ?: 0L
     val user = if (userId != 0L) UserCache.user(userId) else null
     val username = user?.usernames?.activeUsernames?.firstOrNull()
+    var mediaTarget by remember { mutableStateOf<app.fork.messenger.media.MediaTarget?>(null) }
 
     Scaffold(
         topBar = {
@@ -142,7 +151,276 @@ fun ChatInfoScreen(chatId: Long, onBack: () -> Unit) {
 
             MuteRow(chat)
 
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            SharedMediaSection(chatId = chatId, onOpenMedia = { mediaTarget = it })
+
             Spacer(Modifier.height(24.dp))
+        }
+    }
+
+    mediaTarget?.let { target ->
+        app.fork.messenger.media.MediaViewer(target = target, onClose = { mediaTarget = null })
+    }
+}
+
+/** Вложения чата: вкладки Медиа / Файлы / Ссылки / Голосовые (как в Telegram). */
+@Composable
+private fun SharedMediaSection(
+    chatId: Long,
+    onOpenMedia: (app.fork.messenger.media.MediaTarget) -> Unit,
+) {
+    val tokens = app.fork.messenger.ui.forkTokens
+    var tab by remember(chatId) { mutableStateOf(SharedMediaStore.Tab.MEDIA) }
+    val tabs by SharedMediaStore.tabs.collectAsStateWithLifecycle()
+    val state = tabs[tab] ?: SharedMediaStore.TabState()
+
+    LaunchedEffect(chatId) { SharedMediaStore.open(chatId) }
+    LaunchedEffect(chatId, tab) { SharedMediaStore.load(tab) }
+
+    // Чипы вкладок в дизайн-языке Fork.
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SharedMediaStore.Tab.entries.forEach { t ->
+            val active = t == tab
+            Box(
+                Modifier
+                    .height(32.dp)
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(
+                        if (active) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    )
+                    .clickable { tab = t }
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    t.title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (active) MaterialTheme.colorScheme.surface
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+
+    if (state.messages.isEmpty() && !state.loading) {
+        Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+            Text(
+                "Пока пусто",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    } else {
+        when (tab) {
+            SharedMediaStore.Tab.MEDIA -> MediaGrid(state.messages, onOpenMedia)
+            SharedMediaStore.Tab.FILES -> FilesList(state.messages)
+            SharedMediaStore.Tab.LINKS -> LinksList(state.messages)
+            SharedMediaStore.Tab.VOICE -> VoiceList(state.messages)
+        }
+    }
+
+    if (state.loading) {
+        Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+            androidx.compose.material3.CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = tokens.checkCyan,
+            )
+        }
+    } else if (!state.ended && state.messages.isNotEmpty()) {
+        Text(
+            "Показать ещё",
+            style = MaterialTheme.typography.labelLarge,
+            color = tokens.checkCyan,
+            modifier = Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .clickable { SharedMediaStore.load(tab) }
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        )
+    }
+}
+
+/** Сетка медиа 3 в ряд, квадратные ячейки. */
+@Composable
+private fun MediaGrid(
+    messages: List<TdApi.Message>,
+    onOpenMedia: (app.fork.messenger.media.MediaTarget) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 2.dp)) {
+        messages.chunked(3).forEach { rowItems ->
+            Row(Modifier.fillMaxWidth()) {
+                rowItems.forEach { msg ->
+                    Box(Modifier.weight(1f).padding(1.dp)) {
+                        MediaCell(msg, onOpenMedia)
+                    }
+                }
+                repeat(3 - rowItems.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** Квадратная ячейка фото/видео в сетке вложений. */
+@Composable
+private fun MediaCell(
+    message: TdApi.Message,
+    onOpenMedia: (app.fork.messenger.media.MediaTarget) -> Unit,
+) {
+    when (val content = message.content) {
+        is TdApi.MessagePhoto -> {
+            val photo = content.photo
+            val size = photo.inlineSize() ?: return
+            SquareThumb(
+                file = size.photo,
+                mini = photo.minithumbnail,
+                onClick = { onOpenMedia(app.fork.messenger.media.MediaTarget.Photo(photo)) },
+            )
+        }
+        is TdApi.MessageVideo -> {
+            val video = content.video
+            Box {
+                SquareThumb(
+                    file = video.thumbnail?.file,
+                    mini = video.minithumbnail,
+                    onClick = { onOpenMedia(app.fork.messenger.media.MediaTarget.Video(video)) },
+                )
+                Text(
+                    app.fork.messenger.media.formatDuration(video.duration),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(Color(0x8C050912))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
+        else -> Unit
+    }
+}
+
+/** Квадратный тамбнейл: мини-превью сразу, полный файл — по мере загрузки. */
+@Composable
+private fun SquareThumb(file: TdApi.File?, mini: TdApi.Minithumbnail?, onClick: () -> Unit) {
+    val state = app.fork.messenger.media.rememberFileState(file, autoDownload = true, priority = 18)
+    val miniBitmap = remember(mini) {
+        mini?.data?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(6.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick),
+    ) {
+        if (miniBitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = miniBitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+        state.path?.let { path ->
+            AsyncImage(
+                model = File(path),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+    }
+}
+
+/** Список файлов. */
+@Composable
+private fun FilesList(messages: List<TdApi.Message>) {
+    Column(Modifier.fillMaxWidth()) {
+        messages.forEach { msg ->
+            val doc = (msg.content as? TdApi.MessageDocument)?.document ?: return@forEach
+            Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                app.fork.messenger.media.DocumentContent(doc, mine = false)
+            }
+        }
+    }
+}
+
+/** Список ссылок: домен + заголовок превью (если есть). */
+@Composable
+private fun LinksList(messages: List<TdApi.Message>) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(Modifier.fillMaxWidth()) {
+        messages.forEach { msg ->
+            val text = msg.content as? TdApi.MessageText ?: return@forEach
+            val url = text.linkPreview?.url
+                ?: firstUrl(text.text)
+                ?: return@forEach
+            val title = text.linkPreview?.title?.takeIf { it.isNotBlank() }
+                ?: text.linkPreview?.siteName?.takeIf { it.isNotBlank() }
+                ?: url
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(url),
+                                ),
+                            )
+                        }
+                    }
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+                Text(
+                    url,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = app.fork.messenger.ui.forkTokens.checkCyan,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/** Первая ссылка из текста сообщения (по entity TDLib). */
+private fun firstUrl(text: TdApi.FormattedText): String? {
+    val entity = text.entities?.firstOrNull {
+        it.type is TdApi.TextEntityTypeUrl || it.type is TdApi.TextEntityTypeTextUrl
+    } ?: return null
+    return when (val type = entity.type) {
+        is TdApi.TextEntityTypeTextUrl -> type.url
+        else -> text.text.substring(entity.offset, entity.offset + entity.length)
+    }
+}
+
+/** Список голосовых. */
+@Composable
+private fun VoiceList(messages: List<TdApi.Message>) {
+    Column(Modifier.fillMaxWidth()) {
+        messages.forEach { msg ->
+            val voice = (msg.content as? TdApi.MessageVoiceNote)?.voiceNote ?: return@forEach
+            Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                app.fork.messenger.media.VoiceContent(voice, mine = false)
+            }
         }
     }
 }
