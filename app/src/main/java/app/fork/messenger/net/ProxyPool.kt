@@ -56,53 +56,69 @@ object ProxyPool {
     private fun proxyOf(c: Candidate) = TdApi.Proxy(c.host, c.port, TdApi.ProxyTypeMtproto(c.secret))
 
     /**
-     * Тестирует кандидатов параллельно и включает первый ответивший (самый быстрый).
-     * Можно звать до авторизации (TestProxy это позволяет).
+     * Makes the PRIMARY proxy (compiled / GitHub-config) the single enabled proxy.
+     * This is the reliable startup path: it is idempotent (does not reconnect a
+     * working primary), and it REMOVES any other proxies — including stale/bad
+     * ones picked up earlier — so a broken proxy can never persist across restarts.
+     *
+     * Critically, it does NOT churn the connection on a timer; a proxy handshake
+     * legitimately takes 10-15s and must be left alone to complete.
      */
-    fun selectAndEnable(context: Context) {
+    fun enablePrimary(context: Context) {
+        val primary = candidates(context).firstOrNull() ?: return
+        TdClient.send(TdApi.GetProxies()) { result ->
+            val proxies = (result as? TdApi.AddedProxies)?.proxies.orEmpty().filterNotNull()
+            val existing = proxies.firstOrNull {
+                it.proxy.server == primary.host && it.proxy.port == primary.port &&
+                    it.proxy.type is TdApi.ProxyTypeMtproto
+            }
+            // Drop everything that is not the primary (clears bad persisted proxies).
+            proxies.filter { it !== existing }.forEach { TdClient.send(TdApi.RemoveProxy(it.id)) }
+            when {
+                existing == null -> TdClient.send(TdApi.AddProxy(proxyOf(primary), true, "Fork"))
+                !existing.isEnabled -> TdClient.send(TdApi.EnableProxy(existing.id))
+                else -> Log.i(TAG, "primary proxy already enabled")
+            }
+        }
+    }
+
+    /**
+     * Conservative one-shot failover (called only after a long stall): tests all
+     * candidates in parallel and enables the first that responds. Used when the
+     * primary appears dead (e.g. blocked network / VPN). Never runs on a tight
+     * loop — the caller invokes it at most once per disconnect episode.
+     */
+    fun selectBestAndEnable(context: Context) {
         if (selecting) return
         val list = candidates(context).take(MAX_TESTED)
-        if (list.isEmpty()) return
-        if (list.size == 1) {
-            // Cold start / single proxy: enable immediately, no GetProxies round-trip,
-            // so TDLib starts the proxy handshake as early as possible. TDLib dedups
-            // identical proxies, so repeated launches don't accumulate entries.
-            TdClient.send(TdApi.AddProxy(proxyOf(list.first()), true, "Fork"))
-            return
-        }
+        if (list.size <= 1) return // nothing better to try than the primary
         selecting = true
         val decided = AtomicBoolean(false)
         var pending = list.size
-
         list.forEach { candidate ->
             val started = System.currentTimeMillis()
             TdClient.send(TdApi.TestProxy(proxyOf(candidate), TEST_DC, TEST_TIMEOUT)) { result ->
                 pending--
-                val ok = result is TdApi.Ok
-                if (ok && decided.compareAndSet(false, true)) {
-                    val ms = System.currentTimeMillis() - started
-                    Log.i(TAG, "selected ${candidate.host}:${candidate.port} (${ms}ms)")
-                    enable(candidate)
+                if (result is TdApi.Ok && decided.compareAndSet(false, true)) {
+                    Log.i(TAG, "failover -> ${candidate.host}:${candidate.port} " +
+                        "(${System.currentTimeMillis() - started}ms)")
+                    enableExact(candidate)
                     selecting = false
                 } else if (pending == 0 && !decided.get()) {
-                    // Никто не прошёл тест — включаем основной, TDLib продолжит ретраи.
-                    Log.w(TAG, "no proxy passed test, falling back to primary")
-                    enable(list.first())
-                    selecting = false
+                    selecting = false // none worked; keep primary, let TDLib retry
                 }
             }
         }
     }
 
-    /** Делает кандидата единственным включённым прокси. */
-    private fun enable(c: Candidate) {
+    /** Makes a specific candidate the single enabled proxy (failover target). */
+    private fun enableExact(c: Candidate) {
         TdClient.send(TdApi.GetProxies()) { result ->
             val proxies = (result as? TdApi.AddedProxies)?.proxies.orEmpty().filterNotNull()
             val existing = proxies.firstOrNull {
                 it.proxy.server == c.host && it.proxy.port == c.port &&
                     it.proxy.type is TdApi.ProxyTypeMtproto
             }
-            // Лишние прокси убираем, чтобы не накапливались.
             proxies.filter { it !== existing }.forEach { TdClient.send(TdApi.RemoveProxy(it.id)) }
             if (existing != null) {
                 if (!existing.isEnabled) TdClient.send(TdApi.EnableProxy(existing.id))

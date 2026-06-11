@@ -1,6 +1,7 @@
 package app.fork.messenger.media
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -44,8 +45,10 @@ import org.drinkless.tdlib.TdApi
  *    every scroll-back.
  */
 
-/** Caps simultaneously animating stickers to keep CPU bounded. */
-private const val MAX_CONCURRENT_ANIMATIONS = 4
+// Cap simultaneous animations to keep CPU bounded, but high enough that every
+// sticker visible on screen at once still animates (a chat rarely shows >8).
+// Too low a cap was leaving most idle stickers frozen as static thumbnails.
+private const val MAX_CONCURRENT_ANIMATIONS = 12
 private val activeAnimations = AtomicInteger(0)
 
 /** path -> inflated Lottie JSON, so scrolling back doesn't re-inflate. */
@@ -96,17 +99,32 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
         }
     }
 
+    // Animation visible only once it can play; otherwise the thumbnail shows.
+    // Both layers FILL the same box at the same scale, so there is no size "pop"
+    // (shrink) when switching between static thumbnail and animation.
+    val animating = play && path != null && hasSlot
     Box(modifier, contentAlignment = Alignment.Center) {
-        if (thumbPath != null) {
-            AsyncImage(model = File(thumbPath), contentDescription = sticker.emoji)
-        } else if (sticker.format is TdApi.StickerFormatWebp && path != null) {
-            AsyncImage(model = File(path), contentDescription = sticker.emoji)
-        }
-        if (play && path != null && hasSlot) {
+        if (!animating) {
+            val staticPath = thumbPath
+                ?: path.takeIf { sticker.format is TdApi.StickerFormatWebp }
+            if (staticPath != null) {
+                AsyncImage(
+                    model = File(staticPath),
+                    contentDescription = sticker.emoji,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        } else {
             when (sticker.format) {
-                is TdApi.StickerFormatTgs -> TgsView(path)
-                is TdApi.StickerFormatWebm -> WebmView(path)
-                else -> AsyncImage(model = File(path), contentDescription = sticker.emoji)
+                is TdApi.StickerFormatTgs -> TgsView(path!!)
+                is TdApi.StickerFormatWebm -> WebmView(path!!)
+                else -> AsyncImage(
+                    model = File(path!!),
+                    contentDescription = sticker.emoji,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }
@@ -126,7 +144,11 @@ private fun TgsView(path: String) {
     }
     val data = json ?: return
     val composition by rememberLottieComposition(LottieCompositionSpec.JsonString(data))
-    LottieAnimation(composition = composition, iterations = LottieConstants.IterateForever)
+    LottieAnimation(
+        composition = composition,
+        iterations = LottieConstants.IterateForever,
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 @OptIn(UnstableApi::class)
@@ -143,12 +165,15 @@ private fun WebmView(path: String) {
         }
     }
     DisposableEffect(player) { onDispose { player.release() } }
-    AndroidView(factory = { ctx ->
-        PlayerView(ctx).apply {
-            this.player = player
-            useController = false
-            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-            setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
-        }
-    })
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                this.player = player
+                useController = false
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+            }
+        },
+    )
 }

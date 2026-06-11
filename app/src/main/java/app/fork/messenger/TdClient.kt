@@ -74,6 +74,7 @@ object TdClient {
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default,
     )
     private var watchdogJob: kotlinx.coroutines.Job? = null
+    @Volatile private var failoverTried = false
 
     @Synchronized
     fun start(context: Context) {
@@ -159,6 +160,7 @@ object TdClient {
                 }
                 if (obj.state is TdApi.ConnectionStateReady) {
                     watchdogJob?.cancel()
+                    failoverTried = false // fresh episode next time we drop
                 } else {
                     armProxyWatchdog()
                 }
@@ -287,19 +289,26 @@ object TdClient {
 
     private fun ensureProxy() {
         if (!::appContext.isInitialized) return
-        // Параллельно тестируем все прокси из пула и включаем самый быстрый рабочий.
-        app.fork.messenger.net.ProxyPool.selectAndEnable(appContext)
+        // Reliable path: enable the known-good primary proxy and clear any stale ones.
+        // Do NOT churn on a timer — a proxy handshake legitimately takes 10-15s.
+        app.fork.messenger.net.ProxyPool.enablePrimary(appContext)
     }
 
-    /** Если 12с не удаётся подключиться — перевыбираем рабочий прокси из пула. */
+    /**
+     * Conservative failover: only if we still aren't connected 30s after going
+     * offline, try the saved proxy pool ONCE (e.g. primary blocked / VPN). Never
+     * loops — runs at most once per disconnect episode, so it cannot interrupt a
+     * handshake that is simply taking a while.
+     */
     private fun armProxyWatchdog() {
-        if (watchdogJob?.isActive == true) return
+        if (watchdogJob?.isActive == true || failoverTried) return
         if (!::appContext.isInitialized) return
         watchdogJob = watchdogScope.launch {
-            kotlinx.coroutines.delay(12_000)
+            kotlinx.coroutines.delay(30_000)
             if (_connectionState.value != "подключено") {
-                Log.w(TAG, "still not connected — re-selecting proxy")
-                app.fork.messenger.net.ProxyPool.selectAndEnable(appContext)
+                failoverTried = true
+                Log.w(TAG, "still not connected after 30s — trying proxy failover")
+                app.fork.messenger.net.ProxyPool.selectBestAndEnable(appContext)
             }
         }
     }
