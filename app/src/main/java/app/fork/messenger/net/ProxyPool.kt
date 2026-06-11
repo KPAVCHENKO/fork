@@ -56,15 +56,29 @@ object ProxyPool {
     private fun proxyOf(c: Candidate) = TdApi.Proxy(c.host, c.port, TdApi.ProxyTypeMtproto(c.secret))
 
     /**
-     * Makes the PRIMARY proxy (compiled / GitHub-config) the single enabled proxy.
-     * This is the reliable startup path: it is idempotent (does not reconnect a
-     * working primary), and it REMOVES any other proxies — including stale/bad
-     * ones picked up earlier — so a broken proxy can never persist across restarts.
+     * STARTUP fast path: enable the primary proxy IMMEDIATELY, with no GetProxies
+     * round-trip in front of it.
      *
-     * Critically, it does NOT churn the connection on a timer; a proxy handshake
-     * legitimately takes 10-15s and must be left alone to complete.
+     * Why this matters for cold-connect speed: TDLib begins connecting right after
+     * SetTdlibParameters. If the proxy isn't enabled yet, TDLib's first attempt goes
+     * DIRECT, hits the RF DPI block, and only times out after ~10s before falling
+     * back to the proxy — which is most of the ~15s. By queuing AddProxy(enable=true)
+     * directly after SetTdlibParameters (no round-trip), the proxy is active for the
+     * very first connection attempt. TDLib dedups identical proxies, so repeated
+     * launches don't accumulate entries. Stale-proxy cleanup is deferred
+     * (see [cleanupKeepingPrimary]) so it never delays the handshake.
      */
-    fun enablePrimary(context: Context) {
+    fun enablePrimaryFast(context: Context) {
+        val primary = candidates(context).firstOrNull() ?: return
+        TdClient.send(TdApi.AddProxy(proxyOf(primary), true, "Fork"))
+    }
+
+    /**
+     * Reconcile the proxy list to a single enabled PRIMARY: removes any other
+     * proxies (clears stale/bad ones) and ensures the primary is enabled. Idempotent
+     * and safe to run AFTER the connection is up, or when the GitHub config changes.
+     */
+    fun cleanupKeepingPrimary(context: Context) {
         val primary = candidates(context).firstOrNull() ?: return
         TdClient.send(TdApi.GetProxies()) { result ->
             val proxies = (result as? TdApi.AddedProxies)?.proxies.orEmpty().filterNotNull()
@@ -72,7 +86,6 @@ object ProxyPool {
                 it.proxy.server == primary.host && it.proxy.port == primary.port &&
                     it.proxy.type is TdApi.ProxyTypeMtproto
             }
-            // Drop everything that is not the primary (clears bad persisted proxies).
             proxies.filter { it !== existing }.forEach { TdClient.send(TdApi.RemoveProxy(it.id)) }
             when {
                 existing == null -> TdClient.send(TdApi.AddProxy(proxyOf(primary), true, "Fork"))

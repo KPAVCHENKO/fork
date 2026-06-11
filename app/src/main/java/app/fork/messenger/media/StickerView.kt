@@ -99,23 +99,23 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
         }
     }
 
-    // Animation visible only once it can play; otherwise the thumbnail shows.
-    // Both layers FILL the same box at the same scale, so there is no size "pop"
-    // (shrink) when switching between static thumbnail and animation.
     val animating = play && path != null && hasSlot
     Box(modifier, contentAlignment = Alignment.Center) {
-        if (!animating) {
-            val staticPath = thumbPath
-                ?: path.takeIf { sticker.format is TdApi.StickerFormatWebp }
-            if (staticPath != null) {
-                AsyncImage(
-                    model = File(staticPath),
-                    contentDescription = sticker.emoji,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        } else {
+        // Thumbnail is ALWAYS the base layer (same box/scale as the animation), so
+        // the sticker is never blank — not while scrolling, and not during the gap
+        // before Lottie parses / WEBM buffers. The animation is overlaid on top once
+        // ready. (The previous either/or layout made stickers vanish in that gap.)
+        val staticPath = thumbPath
+            ?: path.takeIf { sticker.format is TdApi.StickerFormatWebp }
+        if (staticPath != null) {
+            AsyncImage(
+                model = File(staticPath),
+                contentDescription = sticker.emoji,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        if (animating) {
             when (sticker.format) {
                 is TdApi.StickerFormatTgs -> TgsView(path!!)
                 is TdApi.StickerFormatWebm -> WebmView(path!!)

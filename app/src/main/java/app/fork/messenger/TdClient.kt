@@ -76,10 +76,14 @@ object TdClient {
     private var watchdogJob: kotlinx.coroutines.Job? = null
     @Volatile private var failoverTried = false
 
+    /** Wall-clock at process start, for per-phase connection timing logs. */
+    @Volatile private var connectStartMs = 0L
+
     @Synchronized
     fun start(context: Context) {
         if (client != null) return
         appContext = context.applicationContext
+        connectStartMs = System.currentTimeMillis()
 
         Client.setLogMessageHandler(1) { verbosityLevel, message ->
             Log.e("TDLib", "[$verbosityLevel] $message")
@@ -158,9 +162,18 @@ object TdClient {
                     is TdApi.ConnectionStateReady -> "подключено"
                     else -> obj.state.javaClass.simpleName
                 }
+                // Per-phase timing so we can see WHERE the cold connect spends time
+                // (filter logcat by "ForkConnect"): each line shows ms since process start.
+                val elapsed = if (connectStartMs == 0L) 0 else System.currentTimeMillis() - connectStartMs
+                Log.i("ForkConnect", "${obj.state.javaClass.simpleName} @ +${elapsed}ms")
                 if (obj.state is TdApi.ConnectionStateReady) {
                     watchdogJob?.cancel()
                     failoverTried = false // fresh episode next time we drop
+                    // Connection is up — now safe to tidy up stale proxies (deferred so
+                    // it never delays the handshake).
+                    if (::appContext.isInitialized) {
+                        app.fork.messenger.net.ProxyPool.cleanupKeepingPrimary(appContext)
+                    }
                 } else {
                     armProxyWatchdog()
                 }
@@ -266,7 +279,10 @@ object TdClient {
      */
     /** Пере-применить прокси (например, после обновления конфига с GitHub). */
     fun reapplyProxy() {
-        if (::appContext.isInitialized) ensureProxy()
+        // GitHub config changed: full reconcile (drop old proxy, enable the new one).
+        if (::appContext.isInitialized) {
+            app.fork.messenger.net.ProxyPool.cleanupKeepingPrimary(appContext)
+        }
     }
 
     /** Регистрирует FCM-токен: после этого сервер Telegram шлёт пуши сам. */
@@ -289,9 +305,11 @@ object TdClient {
 
     private fun ensureProxy() {
         if (!::appContext.isInitialized) return
-        // Reliable path: enable the known-good primary proxy and clear any stale ones.
-        // Do NOT churn on a timer — a proxy handshake legitimately takes 10-15s.
-        app.fork.messenger.net.ProxyPool.enablePrimary(appContext)
+        // Enable the primary proxy IMMEDIATELY (no round-trip) so it is active for
+        // TDLib's very first connection attempt — avoids a doomed direct attempt that
+        // times out on RF DPI and eats ~10s. Cleanup of stale proxies is deferred to
+        // after ConnectionStateReady.
+        app.fork.messenger.net.ProxyPool.enablePrimaryFast(appContext)
     }
 
     /**
