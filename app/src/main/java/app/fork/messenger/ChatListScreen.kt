@@ -660,6 +660,23 @@ private fun ChatRow(chat: UiChat, onClick: () -> Unit) {
                     )
                 }
                 Spacer(Modifier.weight(1f))
+                // Галочки вашего последнего сообщения (как в Telegram).
+                val checkIcon = when (chat.lastOutStatus) {
+                    OutStatus.SENDING -> ForkIcons.Clock
+                    OutStatus.SENT -> ForkIcons.Check
+                    OutStatus.READ -> ForkIcons.CheckDouble
+                    else -> null
+                }
+                if (checkIcon != null) {
+                    Icon(
+                        checkIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp),
+                        tint = if (chat.lastOutStatus == OutStatus.READ) tokens.checkCyan
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(3.dp))
+                }
                 Text(
                     text = chat.time,
                     style = TimestampStyle,

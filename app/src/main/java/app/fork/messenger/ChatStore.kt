@@ -37,6 +37,8 @@ data class UiChat(
     val colorSeed: Long,
     val isOnline: Boolean,
     val previewThumb: ImageBitmap? = null,
+    /** Статус ВАШЕГО последнего сообщения для галочек в списке (как в Telegram). */
+    val lastOutStatus: OutStatus = OutStatus.NONE,
 )
 
 /**
@@ -196,6 +198,10 @@ object ChatStore {
                 it.lastReadInboxMessageId = obj.lastReadInboxMessageId
             }
 
+            is TdApi.UpdateChatReadOutbox -> mutate(obj.chatId) {
+                it.lastReadOutboxMessageId = obj.lastReadOutboxMessageId
+            }
+
             is TdApi.UpdateChatNotificationSettings -> mutate(obj.chatId) {
                 it.notificationSettings = obj.notificationSettings
             }
@@ -328,6 +334,15 @@ object ChatStore {
         val draft = (chat.draftMessage?.inputMessageText as? TdApi.InputMessageText)
             ?.text?.text?.takeIf { it.isNotBlank() }
 
+        // Статус вашего последнего сообщения для галочек в строке чата.
+        val lastOutStatus = when {
+            last == null || !last.isOutgoing || isChannel -> OutStatus.NONE
+            last.sendingState is TdApi.MessageSendingStateFailed -> OutStatus.FAILED
+            last.sendingState is TdApi.MessageSendingStatePending -> OutStatus.SENDING
+            last.id <= chat.lastReadOutboxMessageId -> OutStatus.READ
+            else -> OutStatus.SENT
+        }
+
         return UiChat(
             id = chat.id,
             title = chat.title.ifBlank { "Без названия" },
@@ -343,6 +358,7 @@ object ChatStore {
             colorSeed = chat.id,
             isOnline = (type as? TdApi.ChatTypePrivate)?.let { UserCache.isOnline(it.userId) } == true,
             previewThumb = thumb,
+            lastOutStatus = lastOutStatus,
         )
     }
 }

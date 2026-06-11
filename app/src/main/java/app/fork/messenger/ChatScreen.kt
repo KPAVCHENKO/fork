@@ -76,6 +76,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -149,11 +150,18 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     var stickerSetId by remember { mutableStateOf<Long?>(null) }
 
     // Назад: сперва закрыть клавиатуру, потом выбор/поиск, и только потом выйти из чата.
+    // Опираемся на фокус поля ввода (а не на инсеты IME — они приходят с задержкой,
+    // из-за чего «назад» проскакивал в выход из чата).
+    var inputFocused by remember(chatId) { mutableStateOf(false) }
     val imeVisible = WindowInsets.isImeVisible
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     BackHandler {
         when {
-            imeVisible -> keyboard?.hide()
+            inputFocused || imeVisible -> {
+                focusManager.clearFocus()
+                keyboard?.hide()
+            }
             selectionMode -> selection.clear()
             searchMode -> {
                 searchMode = false
@@ -332,7 +340,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
             },
             bottomBar = {
                 if (header?.canWrite != false) {
-                    MessageInput(chatId)
+                    MessageInput(chatId, onFocusChanged = { inputFocused = it })
                 } else {
                     ReadOnlyBar()
                 }
@@ -1257,7 +1265,7 @@ private fun captionText(content: TdApi.MessageContent?): String? {
 }
 
 @Composable
-private fun MessageInput(chatId: Long) {
+private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
     var text by rememberSaveable(chatId) { mutableStateOf("") }
     val context = LocalContext.current
 
@@ -1396,7 +1404,9 @@ private fun MessageInput(chatId: Long) {
                             ),
                             keyboardActions = KeyboardActions(onSend = { submit() }),
                             maxLines = 5,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { onFocusChanged(it.isFocused) },
                         )
                     }
                     IconButton(

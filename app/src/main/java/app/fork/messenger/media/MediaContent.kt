@@ -71,9 +71,7 @@ fun MediaImage(
     onClick: (() -> Unit)? = null,
 ) {
     val state = rememberFileState(file, autoDownload = true, priority = priority)
-    val miniBitmap = remember(mini) {
-        mini?.data?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-    }
+    val miniBitmap = rememberMiniThumb(mini)
 
     Box(
         modifier
@@ -87,7 +85,7 @@ fun MediaImage(
     ) {
         if (miniBitmap != null) {
             androidx.compose.foundation.Image(
-                bitmap = miniBitmap.asImageBitmap(),
+                bitmap = miniBitmap,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),
@@ -432,13 +430,11 @@ fun VideoNoteContent(note: TdApi.VideoNote) {
         if (playing && path != null) {
             CircleVideoPlayer(path = path, onEnded = { playing = false })
         } else {
-            val miniBitmap = remember(note.minithumbnail) {
-                note.minithumbnail?.data?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-            }
+            val miniBitmap = rememberMiniThumb(note.minithumbnail)
             val thumbState = rememberFileState(note.thumbnail?.file, autoDownload = true, priority = 20)
             if (miniBitmap != null) {
                 androidx.compose.foundation.Image(
-                    bitmap = miniBitmap.asImageBitmap(),
+                    bitmap = miniBitmap,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.matchParentSize(),

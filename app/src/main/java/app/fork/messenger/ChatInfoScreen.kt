@@ -398,9 +398,7 @@ private fun MediaCell(
 @Composable
 private fun SquareThumb(file: TdApi.File?, mini: TdApi.Minithumbnail?, onClick: () -> Unit) {
     val state = app.fork.messenger.media.rememberFileState(file, autoDownload = true, priority = 18)
-    val miniBitmap = remember(mini) {
-        mini?.data?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
-    }
+    val miniBitmap = app.fork.messenger.media.rememberMiniThumb(mini)
     Box(
         Modifier
             .fillMaxWidth()
@@ -411,7 +409,7 @@ private fun SquareThumb(file: TdApi.File?, mini: TdApi.Minithumbnail?, onClick: 
     ) {
         if (miniBitmap != null) {
             androidx.compose.foundation.Image(
-                bitmap = miniBitmap.asImageBitmap(),
+                bitmap = miniBitmap,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.matchParentSize(),

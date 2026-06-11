@@ -57,19 +57,23 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
     val state = rememberFileState(sticker.sticker, autoDownload = true, priority = 24)
     val path = state.path
 
+    // Статичная миниатюра ВСЕГДА под анимацией — так стикер виден сразу и не пропадает,
+    // даже если анимированный формат (премиум/видео-стикер) не успел/не смог декодироваться.
+    val thumb = sticker.thumbnail?.file
+    val thumbPath = if (thumb != null) rememberFileState(thumb, true, 20).path else null
+
     Box(modifier, contentAlignment = Alignment.Center) {
-        when {
-            path == null -> {
-                // Пока качается — показываем превью-картинку, если есть.
-                val thumb = sticker.thumbnail?.file
-                val thumbPath = if (thumb != null) rememberFileState(thumb, true, 20).path else null
-                if (thumbPath != null) {
-                    AsyncImage(model = File(thumbPath), contentDescription = sticker.emoji, modifier = Modifier)
-                }
+        if (thumbPath != null) {
+            AsyncImage(model = File(thumbPath), contentDescription = sticker.emoji)
+        } else if (sticker.format is TdApi.StickerFormatWebp && path != null) {
+            AsyncImage(model = File(path), contentDescription = sticker.emoji)
+        }
+        if (path != null) {
+            when (sticker.format) {
+                is TdApi.StickerFormatTgs -> TgsView(path, play)
+                is TdApi.StickerFormatWebm -> WebmView(path, play)
+                else -> AsyncImage(model = File(path), contentDescription = sticker.emoji)
             }
-            sticker.format is TdApi.StickerFormatTgs -> TgsView(path, play)
-            sticker.format is TdApi.StickerFormatWebm -> WebmView(path, play)
-            else -> AsyncImage(model = File(path), contentDescription = sticker.emoji)
         }
     }
 }

@@ -1,14 +1,18 @@
 package app.fork.messenger.ui
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -37,7 +41,12 @@ private val Indigo = Color(0xFF2362FD)
 private val Cyan = Color(0xFF00B8D9)
 private val Violet = Color(0xFF8B5CF6)
 
-/** Полотно обоев; dim — затемнение узора 0..0.6 (scrim #04070E). */
+/**
+ * Полотно обоев; dim — затемнение узора 0..0.6 (scrim #04070E).
+ * Узор рисуется ОДИН раз в офскрин-bitmap (drawWithCache) и при прокрутке только
+ * копируется — иначе сотни векторных примитивов перерисовывались каждый кадр и
+ * роняли FPS на слабых устройствах.
+ */
 @Composable
 fun ChatWallpaperCanvas(
     wallpaper: ChatWallpaper,
@@ -46,12 +55,23 @@ fun ChatWallpaperCanvas(
     dim: Float,
     modifier: Modifier = Modifier,
 ) {
-    Canvas(modifier) {
-        drawWallpaper(wallpaper, dark = dark, amoled = amoled)
-        if (dim > 0f) {
-            drawRect(Color(0xFF04070E).copy(alpha = dim.coerceIn(0f, 0.6f)))
-        }
-    }
+    Box(
+        modifier.drawWithCache {
+            val w = size.width.toInt().coerceAtLeast(1)
+            val h = size.height.toInt().coerceAtLeast(1)
+            // Рендерим узор в bitmap один раз на данный размер/параметры.
+            val bitmap = ImageBitmap(w, h)
+            CanvasDrawScope().draw(this, layoutDirection, Canvas(bitmap), size) {
+                drawWallpaper(wallpaper, dark = dark, amoled = amoled)
+                if (dim > 0f) {
+                    drawRect(Color(0xFF04070E).copy(alpha = dim.coerceIn(0f, 0.6f)))
+                }
+            }
+            onDrawBehind {
+                drawImage(bitmap)
+            }
+        },
+    )
 }
 
 private fun DrawScope.drawWallpaper(wallpaper: ChatWallpaper, dark: Boolean, amoled: Boolean) {
