@@ -155,6 +155,17 @@ object ForkIcons {
         )
     }
 
+    val Trash: ImageVector by lazy {
+        icon(
+            "Trash",
+            "M6 19c0 1.1 0.9 2 2 2h8c1.1 0 2,-0.9 2,-2V7H6v12zM19 4h-3.5l-1,-1h-5l-1 1H5v2h14V4z",
+        )
+    }
+
+    val Forward: ImageVector by lazy {
+        icon("Forward", "M12 8V4l8 8,-8 8v-4H4V8z")
+    }
+
     val ForkMark: ImageVector by lazy {
         strokeIcon("ForkMark", "M8 3v5M12 3v7M16 3v5M8 8c0 2.21 1.79 4 4 4s4,-1.79 4,-4M12 12v9")
     }

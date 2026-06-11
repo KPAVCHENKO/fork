@@ -118,11 +118,24 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
         MessageStore.open(chatId)
         onDispose { MessageStore.close() }
     }
-    BackHandler(onBack = onBack)
 
     var mediaTarget by remember { mutableStateOf<MediaTarget?>(null) }
     var searchMode by remember(chatId) { mutableStateOf(false) }
     var searchQuery by remember(chatId) { mutableStateOf("") }
+    // Мультивыбор сообщений: непустой список = режим выбора.
+    val selection = remember(chatId) { androidx.compose.runtime.mutableStateListOf<Long>() }
+    val selectionMode = selection.isNotEmpty()
+
+    BackHandler {
+        when {
+            selectionMode -> selection.clear()
+            searchMode -> {
+                searchMode = false
+                searchQuery = ""
+            }
+            else -> onBack()
+        }
+    }
     val searchHits by MessageStore.searchHits.collectAsStateWithLifecycle()
     val detached by MessageStore.detached.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -177,6 +190,23 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
+                if (selectionMode) {
+                    SelectionTopBar(
+                        count = selection.size,
+                        onClose = { selection.clear() },
+                        onForward = {
+                            ForwardBus.start(chatId, selection.toLongArray())
+                            selection.clear()
+                        },
+                        onDelete = { forAll ->
+                            MessageStore.deleteMessages(selection.toLongArray(), forAll)
+                            selection.clear()
+                        },
+                        canDeleteForAll = reversed
+                            .filter { it.id in selection }
+                            .all { it.canDeleteForAll },
+                    )
+                } else {
                 TopAppBar(
                     navigationIcon = {
                         IconButton(onClick = {
@@ -250,6 +280,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                         containerColor = MaterialTheme.colorScheme.surface,
                     ),
                 )
+                }
             },
             bottomBar = {
                 if (header?.canWrite != false) {
@@ -303,7 +334,16 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                             if (older == null || older.dateLabel != message.dateLabel) {
                                 DateCapsule(message.dateLabel)
                             }
-                            MessageRow(message, onOpenMedia = { mediaTarget = it })
+                            MessageRow(
+                                message,
+                                onOpenMedia = { mediaTarget = it },
+                                selectionMode = selectionMode,
+                                selected = message.id in selection,
+                                onToggleSelect = {
+                                    if (message.id in selection) selection.remove(message.id)
+                                    else selection.add(message.id)
+                                },
+                            )
                         }
                     }
                     if (loading) {
@@ -384,6 +424,61 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
             MediaViewer(target = target, onClose = { mediaTarget = null })
         }
     }
+}
+
+/** Шапка режима мультивыбора: счётчик + переслать + удалить. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SelectionTopBar(
+    count: Int,
+    onClose: () -> Unit,
+    onForward: () -> Unit,
+    onDelete: (forAll: Boolean) -> Unit,
+    canDeleteForAll: Boolean,
+) {
+    var deleteMenu by remember { mutableStateOf(false) }
+    TopAppBar(
+        navigationIcon = {
+            IconButton(onClick = onClose) {
+                Icon(ForkIcons.Close, contentDescription = "отмена", tint = MaterialTheme.colorScheme.onSurface)
+            }
+        },
+        title = {
+            Text(
+                "$count выбрано",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        },
+        actions = {
+            IconButton(onClick = onForward) {
+                Icon(ForkIcons.Forward, contentDescription = "переслать", tint = MaterialTheme.colorScheme.onSurface)
+            }
+            Box {
+                IconButton(onClick = { deleteMenu = true }) {
+                    Icon(ForkIcons.Trash, contentDescription = "удалить", tint = MaterialTheme.colorScheme.error)
+                }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = deleteMenu,
+                    onDismissRequest = { deleteMenu = false },
+                ) {
+                    if (canDeleteForAll) {
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text("Удалить у всех") },
+                            onClick = { deleteMenu = false; onDelete(true) },
+                        )
+                    }
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text("Удалить у себя") },
+                        onClick = { deleteMenu = false; onDelete(false) },
+                    )
+                }
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+    )
 }
 
 /** Поле поиска по чату в шапке. */

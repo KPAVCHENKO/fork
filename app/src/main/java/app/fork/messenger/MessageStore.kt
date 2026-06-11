@@ -512,10 +512,14 @@ object MessageStore {
         _reply.value = null
     }
 
-    fun deleteMessage(messageId: Long, forEveryone: Boolean) {
+    fun deleteMessage(messageId: Long, forEveryone: Boolean) =
+        deleteMessages(longArrayOf(messageId), forEveryone)
+
+    /** Удаление нескольких сообщений (мультивыбор). */
+    fun deleteMessages(messageIds: LongArray, forEveryone: Boolean) {
         val id = synchronized(lock) { chatId }
-        if (id == 0L) return
-        TdClient.send(TdApi.DeleteMessages(id, longArrayOf(messageId), forEveryone))
+        if (id == 0L || messageIds.isEmpty()) return
+        TdClient.send(TdApi.DeleteMessages(id, messageIds, forEveryone))
     }
 
     fun handleUpdate(obj: TdApi.Object) {

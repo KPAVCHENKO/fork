@@ -43,11 +43,33 @@ import kotlinx.coroutines.launch
 fun MessageRow(
     message: UiMessage,
     onOpenMedia: (MediaTarget) -> Unit,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelect: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     var menuOpen by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
+
+    // Режим выбора: тап и долгое нажатие переключают отметку, меню не открывается.
+    if (selectionMode) {
+        Box(
+            modifier = Modifier
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                .background(
+                    if (selected) app.fork.messenger.ui.forkTokens.checkCyan.copy(alpha = 0.14f)
+                    else androidx.compose.ui.graphics.Color.Transparent,
+                )
+                .combinedClickable(
+                    onClick = { onToggleSelect?.invoke() },
+                    onLongClick = { onToggleSelect?.invoke() },
+                ),
+        ) {
+            MessageBubble(message, onOpenMedia)
+        }
+        return
+    }
 
     val triggerPx = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
     val maxPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
@@ -149,6 +171,12 @@ fun MessageRow(
                         menuOpen = false
                     },
                 )
+                if (onToggleSelect != null) {
+                    DropdownMenuItem(
+                        text = { Text("Выбрать") },
+                        onClick = { onToggleSelect(); menuOpen = false },
+                    )
+                }
                 if (message.canDeleteForAll) {
                     DropdownMenuItem(
                         text = { Text("Удалить у всех") },
