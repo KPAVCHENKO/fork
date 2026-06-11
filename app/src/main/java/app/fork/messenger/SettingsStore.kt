@@ -54,6 +54,14 @@ object SettingsStore {
     private val _wallpaperRevision = MutableStateFlow(0)
     val wallpaperRevision: StateFlow<Int> = _wallpaperRevision.asStateFlow()
 
+    /** Живой предпросмотр за шторкой выбора: id обоев + затемнение. Не сохраняется. */
+    private val _wallpaperPreview = MutableStateFlow<Pair<String, Float>?>(null)
+    val wallpaperPreview: StateFlow<Pair<String, Float>?> = _wallpaperPreview.asStateFlow()
+
+    fun setWallpaperPreview(id: String?, dim: Float = 0f) {
+        _wallpaperPreview.value = id?.let { it to dim.coerceIn(0f, 0.6f) }
+    }
+
     /** Обои конкретного чата (или дефолтные). */
     fun wallpaperFor(chatId: Long): String =
         prefs.getString("wallpaper_$chatId", null) ?: _defaultWallpaper.value

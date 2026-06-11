@@ -131,13 +131,18 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     val selection = remember(chatId) { androidx.compose.runtime.mutableStateListOf<Long>() }
     val selectionMode = selection.isNotEmpty()
 
-    // Обои чата (Fork Design Spec §3.8).
+    // Обои чата (Fork Design Spec §3.8). Предпросмотр из шторки имеет приоритет —
+    // выбор применяется живьём за шторкой; после закрытия читаем сохранённое.
     val wallpaperRevision by SettingsStore.wallpaperRevision.collectAsStateWithLifecycle()
     val defaultWallpaper by SettingsStore.defaultWallpaper.collectAsStateWithLifecycle()
-    val wallpaper = remember(chatId, wallpaperRevision, defaultWallpaper) {
-        app.fork.messenger.ui.ChatWallpaper.byId(SettingsStore.wallpaperFor(chatId))
+    val wallpaperPreview by SettingsStore.wallpaperPreview.collectAsStateWithLifecycle()
+    val wallpaper = remember(chatId, wallpaperRevision, defaultWallpaper, wallpaperPreview) {
+        app.fork.messenger.ui.ChatWallpaper.byId(
+            wallpaperPreview?.first ?: SettingsStore.wallpaperFor(chatId),
+        )
     }
-    val wallpaperDim by SettingsStore.wallpaperDim.collectAsStateWithLifecycle()
+    val storedDim by SettingsStore.wallpaperDim.collectAsStateWithLifecycle()
+    val wallpaperDim = wallpaperPreview?.second ?: storedDim
     val amoled by SettingsStore.amoled.collectAsStateWithLifecycle()
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var topMenuOpen by remember { mutableStateOf(false) }

@@ -54,6 +54,14 @@ fun WallpaperSheet(chatId: Long?, onDismiss: () -> Unit) {
     var selected by remember { mutableStateOf(ChatWallpaper.byId(currentId)) }
     var dim by remember { mutableFloatStateOf(SettingsStore.wallpaperDim.value) }
 
+    // Живой предпросмотр: чат за шторкой меняется сразу при выборе (спека §3.8).
+    androidx.compose.runtime.LaunchedEffect(selected, dim) {
+        SettingsStore.setWallpaperPreview(selected.id, dim)
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose { SettingsStore.setWallpaperPreview(null) }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
