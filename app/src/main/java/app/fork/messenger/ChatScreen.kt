@@ -73,6 +73,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -120,6 +121,10 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     BackHandler(onBack = onBack)
 
     var mediaTarget by remember { mutableStateOf<MediaTarget?>(null) }
+    var searchMode by remember(chatId) { mutableStateOf(false) }
+    var searchQuery by remember(chatId) { mutableStateOf("") }
+    val searchHits by MessageStore.searchHits.collectAsStateWithLifecycle()
+    val detached by MessageStore.detached.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val reversed = messages.asReversed()
@@ -127,18 +132,44 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     // Автопрокрутка к новому сообщению, если пользователь уже у низа.
     val newestId = reversed.firstOrNull()?.id
     LaunchedEffect(newestId) {
-        if (newestId != null && listState.firstVisibleItemIndex <= 2) {
+        if (newestId != null && listState.firstVisibleItemIndex <= 2 && !detached) {
             listState.animateScrollToItem(0)
         }
     }
 
+    // Прыжок из поиска/закрепа: прокрутка к сообщению, когда оно появилось в списке.
+    val scrollTarget by MessageStore.scrollTo.collectAsStateWithLifecycle()
+    LaunchedEffect(scrollTarget, messages) {
+        val target = scrollTarget ?: return@LaunchedEffect
+        val idx = reversed.indexOfFirst { it.id == target }
+        if (idx >= 0) {
+            listState.scrollToItem(idx)
+            MessageStore.consumeScrollTarget()
+        }
+    }
+
+    // Поиск с лёгкой задержкой, чтобы не дёргать сервер на каждую букву.
+    LaunchedEffect(searchQuery, searchMode) {
+        if (searchMode && searchQuery.isNotBlank()) {
+            kotlinx.coroutines.delay(300)
+            MessageStore.searchInChat(searchQuery)
+        } else {
+            MessageStore.clearChatSearch()
+        }
+    }
+
     // Когда прокрутили к самым старым сообщениям — догружаем историю.
+    // Когда у низа «окна» после прыжка — догружаем более новые.
     LaunchedEffect(listState) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
+        snapshotFlow {
+            val info = listState.layoutInfo.visibleItemsInfo
+            (info.lastOrNull()?.index ?: 0) to listState.firstVisibleItemIndex
+        }
             .distinctUntilChanged()
-            .collect { last ->
+            .collect { (last, first) ->
                 val total = MessageStore.messages.value.size
                 if (total > 0 && last >= total - 5) MessageStore.loadMore()
+                if (total > 0 && first <= 2) MessageStore.loadNewer()
             }
     }
 
@@ -148,7 +179,14 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
             topBar = {
                 TopAppBar(
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = {
+                            if (searchMode) {
+                                searchMode = false
+                                searchQuery = ""
+                            } else {
+                                onBack()
+                            }
+                        }) {
                             Icon(
                                 ForkIcons.ArrowBack,
                                 contentDescription = "назад",
@@ -157,39 +195,54 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                         }
                     },
                     title = {
-                        val h = header
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { onOpenInfo(chatId) },
-                        ) {
-                            if (h != null) {
-                                ForkAvatar(
-                                    size = 44.dp,
-                                    avatarPath = h.avatarPath,
-                                    initials = h.initials,
-                                    seed = h.colorSeed,
-                                    online = h.subtitle == "онлайн",
-                                )
-                            }
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    h?.title ?: "",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                if (h != null && h.subtitle.isNotBlank()) {
-                                    val accent = h.subtitle == "онлайн" || h.subtitle.contains("печатает")
-                                    Text(
-                                        h.subtitle,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = if (accent) tokens.checkCyan
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
+                        if (searchMode) {
+                            ChatSearchField(query = searchQuery, onQuery = { searchQuery = it })
+                        } else {
+                            val h = header
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { onOpenInfo(chatId) },
+                            ) {
+                                if (h != null) {
+                                    ForkAvatar(
+                                        size = 44.dp,
+                                        avatarPath = h.avatarPath,
+                                        initials = h.initials,
+                                        seed = h.colorSeed,
+                                        online = h.subtitle == "онлайн",
                                     )
                                 }
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        h?.title ?: "",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (h != null && h.subtitle.isNotBlank()) {
+                                        val accent = h.subtitle == "онлайн" || h.subtitle.contains("печатает")
+                                        Text(
+                                            h.subtitle,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (accent) tokens.checkCyan
+                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    actions = {
+                        if (!searchMode) {
+                            IconButton(onClick = { searchMode = true }) {
+                                Icon(
+                                    ForkIcons.Search,
+                                    contentDescription = "поиск по чату",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                )
                             }
                         }
                     },
@@ -208,14 +261,34 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
                 val pinned by MessageStore.pinned.collectAsStateWithLifecycle()
-                pinned?.let { pin ->
-                    PinnedMessageBar(
-                        text = pin.text,
-                        onClick = {
-                            val idx = reversed.indexOfFirst { it.id == pin.messageId }
-                            if (idx >= 0) scope.launch { listState.animateScrollToItem(idx) }
-                        },
-                    )
+                if (!searchMode) {
+                    pinned?.let { pin ->
+                        PinnedMessageBar(
+                            text = pin.text,
+                            onClick = { MessageStore.jumpTo(pin.messageId) },
+                        )
+                    }
+                }
+                // Результаты поиска по чату — списком поверх переписки.
+                if (searchMode && searchHits.isNotEmpty()) {
+                    LazyColumn(
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .background(MaterialTheme.colorScheme.background),
+                    ) {
+                        itemsIndexed(searchHits, key = { _, hit -> hit.messageId }) { _, hit ->
+                            SearchHitRow(
+                                hit = hit,
+                                onClick = {
+                                    searchMode = false
+                                    searchQuery = ""
+                                    MessageStore.jumpTo(hit.messageId)
+                                },
+                            )
+                        }
+                    }
+                    return@Column
                 }
                 Box(Modifier.fillMaxSize()) {
                 LazyColumn(
@@ -257,7 +330,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                     derivedStateOf { listState.firstVisibleItemIndex > 3 }
                 }
                 androidx.compose.animation.AnimatedVisibility(
-                    visible = showScrollDown,
+                    visible = showScrollDown || detached,
                     enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.7f),
                     exit = fadeOut(tween(150)) + scaleOut(targetScale = 0.7f),
                     modifier = Modifier
@@ -267,7 +340,13 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                     GlassPill(
                         modifier = Modifier
                             .size(46.dp)
-                            .clickable { scope.launch { listState.animateScrollToItem(0) } },
+                            .clickable {
+                                if (detached) {
+                                    MessageStore.returnToLatest()
+                                } else {
+                                    scope.launch { listState.animateScrollToItem(0) }
+                                }
+                            },
                     ) {
                         Icon(
                             ForkIcons.Down,
@@ -304,6 +383,69 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
         mediaTarget?.let { target ->
             MediaViewer(target = target, onClose = { mediaTarget = null })
         }
+    }
+}
+
+/** Поле поиска по чату в шапке. */
+@Composable
+private fun ChatSearchField(query: String, onQuery: (String) -> Unit) {
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    Box(contentAlignment = Alignment.CenterStart) {
+        if (query.isEmpty()) {
+            Text(
+                "Поиск по чату",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
+        }
+        BasicTextField(
+            value = query,
+            onValueChange = onQuery,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                color = MaterialTheme.colorScheme.onSurface,
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(focusRequester),
+        )
+    }
+}
+
+/** Строка результата поиска по чату. */
+@Composable
+private fun SearchHitRow(hit: ChatSearchHit, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                hit.title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                hit.snippet,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            hit.time,
+            style = TimestampStyle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

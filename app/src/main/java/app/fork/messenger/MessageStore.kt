@@ -39,6 +39,9 @@ data class ReplyDraft(val messageId: Long, val preview: String, val sender: Stri
 /** Закреплённое сообщение для плашки в шапке чата. */
 data class PinnedBar(val messageId: Long, val text: String)
 
+/** Результат поиска по сообщениям внутри чата. */
+data class ChatSearchHit(val messageId: Long, val title: String, val snippet: String, val time: String)
+
 /** Режим редактирования своего сообщения. */
 data class EditDraft(val messageId: Long, val text: String)
 
@@ -86,6 +89,18 @@ object MessageStore {
     private val _pinned = MutableStateFlow<PinnedBar?>(null)
     val pinned: StateFlow<PinnedBar?> = _pinned.asStateFlow()
 
+    /** Результаты поиска по текущему чату. */
+    private val _searchHits = MutableStateFlow<List<ChatSearchHit>>(emptyList())
+    val searchHits: StateFlow<List<ChatSearchHit>> = _searchHits.asStateFlow()
+
+    /** id сообщения, к которому UI должен прокрутиться (после прыжка из поиска/закрепа). */
+    private val _scrollTo = MutableStateFlow<Long?>(null)
+    val scrollTo: StateFlow<Long?> = _scrollTo.asStateFlow()
+
+    /** true: показано «окно» истории не у самого низа (после прыжка к старому сообщению). */
+    private val _detached = MutableStateFlow(false)
+    val detached: StateFlow<Boolean> = _detached.asStateFlow()
+
     private var historyEnded = false
 
     fun open(id: Long) {
@@ -116,7 +131,118 @@ object MessageStore {
         app.fork.messenger.notify.NotificationsCenter.clearForChat(id)
         TdClient.send(TdApi.OpenChat(id))
         _pinned.value = null
+        _searchHits.value = emptyList()
+        _scrollTo.value = null
+        _detached.value = false
         refreshPinned(id)
+        loadMore()
+    }
+
+    // ---------- Поиск по чату и прыжок к сообщению ----------
+
+    /** Ищет сообщения в текущем чате (серверный поиск TDLib). */
+    fun searchInChat(query: String) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L || query.isBlank()) {
+            _searchHits.value = emptyList()
+            return
+        }
+        TdClient.send(TdApi.SearchChatMessages(id, null, query, null, 0, 0, 30, null)) { result ->
+            if (synchronized(lock) { chatId } != id) return@send
+            val found = (result as? TdApi.FoundChatMessages)?.messages.orEmpty().filterNotNull()
+            _searchHits.value = found.map { m ->
+                val senderId = (m.senderId as? TdApi.MessageSenderUser)?.userId ?: 0L
+                ChatSearchHit(
+                    messageId = m.id,
+                    title = when {
+                        m.isOutgoing -> "Вы"
+                        senderId != 0L -> UserCache.firstName(senderId) ?: _title.value
+                        else -> _title.value
+                    },
+                    snippet = MessageFormat.contentText(m.content),
+                    time = MessageFormat.listTime(m.date),
+                )
+            }
+        }
+    }
+
+    fun clearChatSearch() {
+        _searchHits.value = emptyList()
+    }
+
+    /** UI прокрутился к цели — сбрасываем запрос. */
+    fun consumeScrollTarget() {
+        _scrollTo.value = null
+    }
+
+    /**
+     * Прыжок к сообщению: если оно уже загружено — просто прокрутка,
+     * иначе перечитываем «окно» истории вокруг него.
+     */
+    fun jumpTo(messageId: Long) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        val loaded = synchronized(lock) { msgs.any { it.id == messageId } }
+        if (loaded) {
+            _scrollTo.value = messageId
+            return
+        }
+        synchronized(lock) {
+            msgs.clear()
+            historyEnded = false
+        }
+        _messages.value = emptyList()
+        _detached.value = true
+        _loadingHistory.value = true
+        TdClient.send(TdApi.GetChatHistory(id, messageId, -15, 40, false)) { result ->
+            _loadingHistory.value = false
+            if (synchronized(lock) { chatId } != id) return@send
+            val incoming = (result as? TdApi.Messages)?.messages.orEmpty().filterNotNull()
+            synchronized(lock) {
+                msgs.clear()
+                msgs.addAll(incoming.sortedBy { it.id })
+            }
+            rebuild()
+            _scrollTo.value = messageId
+        }
+    }
+
+    /** Догружает более новые сообщения, когда показано «окно» истории. */
+    fun loadNewer() {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L || !_detached.value || _loadingHistory.value) return
+        val from = synchronized(lock) { msgs.lastOrNull()?.id } ?: return
+        _loadingHistory.value = true
+        TdClient.send(TdApi.GetChatHistory(id, from, -30, 31, false)) { result ->
+            _loadingHistory.value = false
+            if (synchronized(lock) { chatId } != id) return@send
+            val incoming = (result as? TdApi.Messages)?.messages.orEmpty()
+                .filterNotNull()
+                .filter { it.id > from }
+            synchronized(lock) {
+                val known = msgs.mapTo(HashSet()) { it.id }
+                msgs.addAll(incoming.filter { it.id !in known })
+                msgs.sortBy { it.id }
+            }
+            // Дошли до последнего сообщения чата — окно сомкнулось с настоящим.
+            val lastId = ChatStore.chat(id)?.lastMessage?.id
+            if (incoming.isEmpty() || (lastId != null && synchronized(lock) { msgs.lastOrNull()?.id } == lastId)) {
+                _detached.value = false
+            }
+            rebuild()
+        }
+    }
+
+    /** Возврат к самым свежим сообщениям (кнопка «вниз» после прыжка). */
+    fun returnToLatest() {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        _detached.value = false
+        synchronized(lock) {
+            msgs.clear()
+            historyEnded = false
+        }
+        _messages.value = emptyList()
         loadMore()
     }
 
@@ -395,6 +521,9 @@ object MessageStore {
     fun handleUpdate(obj: TdApi.Object) {
         when (obj) {
             is TdApi.UpdateNewMessage -> ifCurrent(obj.message.chatId) {
+                // Пока показано «окно» старой истории, живые сообщения не вклеиваем:
+                // их добирает loadNewer()/returnToLatest(), иначе список станет дырявым.
+                if (_detached.value) return
                 synchronized(lock) {
                     if (msgs.none { it.id == obj.message.id }) msgs.add(obj.message)
                 }
