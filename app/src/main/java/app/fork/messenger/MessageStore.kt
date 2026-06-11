@@ -35,6 +35,9 @@ data class UiReaction(val emoji: String, val count: Int, val chosen: Boolean)
 /** Черновик ответа: на какое сообщение отвечаем и как его показать в превью. */
 data class ReplyDraft(val messageId: Long, val preview: String, val sender: String?)
 
+/** Режим редактирования своего сообщения. */
+data class EditDraft(val messageId: Long, val text: String)
+
 /** Шапка открытого чата. */
 data class ChatHeader(
     val title: String,
@@ -69,6 +72,9 @@ object MessageStore {
 
     private val _loadingHistory = MutableStateFlow(false)
     val loadingHistory: StateFlow<Boolean> = _loadingHistory.asStateFlow()
+
+    private val _editing = MutableStateFlow<EditDraft?>(null)
+    val editing: StateFlow<EditDraft?> = _editing.asStateFlow()
 
     private val _reply = MutableStateFlow<ReplyDraft?>(null)
     val reply: StateFlow<ReplyDraft?> = _reply.asStateFlow()
@@ -299,13 +305,38 @@ object MessageStore {
         )
     }
 
-    /** Пересылает сообщения из текущего чата в другой. */
-    fun forwardTo(targetChatId: Long, messageIds: LongArray) {
-        val from = synchronized(lock) { chatId }
-        if (from == 0L || targetChatId == 0L || messageIds.isEmpty()) return
+    /** Текущий открытый чат (для пересылки и пр.). */
+    fun currentChatId(): Long = synchronized(lock) { chatId }
+
+    /** Пересылка сообщений между чатами (не зависит от открытого). */
+    fun forwardMessages(fromChatId: Long, toChatId: Long, messageIds: LongArray) {
+        if (fromChatId == 0L || toChatId == 0L || messageIds.isEmpty()) return
         TdClient.send(
-            TdApi.ForwardMessages(targetChatId, null, from, messageIds, null, false, false),
+            TdApi.ForwardMessages(toChatId, null, fromChatId, messageIds, null, false, false),
         )
+    }
+
+    // ---------- Режим редактирования ----------
+
+    fun startEdit(messageId: Long) {
+        val m = synchronized(lock) { msgs.firstOrNull { it.id == messageId } } ?: return
+        if (!m.isOutgoing) return
+        val text = (m.content as? TdApi.MessageText)?.text?.text
+            ?: (m.content as? TdApi.MessagePhoto)?.caption?.text
+            ?: (m.content as? TdApi.MessageVideo)?.caption?.text
+            ?: return
+        _reply.value = null
+        _editing.value = EditDraft(messageId, text)
+    }
+
+    fun clearEdit() {
+        _editing.value = null
+    }
+
+    fun submitEdit(newText: String) {
+        val draft = _editing.value ?: return
+        editMessageText(draft.messageId, newText)
+        _editing.value = null
     }
 
     // ---------- Ответы и удаление ----------

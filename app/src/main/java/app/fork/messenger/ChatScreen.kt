@@ -629,14 +629,23 @@ private fun MessageInput() {
     }
 
     val reply by MessageStore.reply.collectAsStateWithLifecycle()
+    val editing by MessageStore.editing.collectAsStateWithLifecycle()
     val enterToSend by SettingsStore.enterToSend.collectAsStateWithLifecycle()
     var showStickers by remember { mutableStateOf(false) }
 
+    // Вход в режим редактирования — подставляем текст сообщения в поле.
+    LaunchedEffect(editing) {
+        editing?.let { text = it.text }
+    }
+
     fun submit() {
-        if (text.isNotBlank()) {
+        if (text.isBlank()) return
+        if (editing != null) {
+            MessageStore.submitEdit(text)
+        } else {
             MessageStore.sendText(text)
-            text = ""
         }
+        text = ""
     }
 
     Surface(color = MaterialTheme.colorScheme.surface) {
@@ -647,6 +656,9 @@ private fun MessageInput() {
                 // системной навигации (когда закрыта) — берётся максимум из двух отступов.
                 .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars)),
         ) {
+            if (editing != null) {
+                EditBar(editing!!.text, onCancel = { MessageStore.clearEdit(); text = "" })
+            }
             if (reply != null) {
                 ReplyBar(reply!!)
             }
@@ -927,6 +939,47 @@ private fun MediaPreviewDialog(media: PendingMedia, onCancel: () -> Unit, onSend
                     )
                 }
             }
+        }
+    }
+}
+
+/** Панель «редактирую сообщение» над полем ввода. */
+@Composable
+private fun EditBar(preview: String, onCancel: () -> Unit) {
+    val tokens = forkTokens
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 14.dp, end = 4.dp, top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            ForkIcons.Edit,
+            contentDescription = null,
+            tint = tokens.checkCyan,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Редактирование",
+                style = MaterialTheme.typography.labelMedium,
+                color = tokens.checkCyan,
+            )
+            Text(
+                preview,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        IconButton(onClick = onCancel) {
+            Icon(
+                ForkIcons.Close,
+                contentDescription = "отменить редактирование",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

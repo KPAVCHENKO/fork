@@ -120,6 +120,19 @@ fun MessageRow(
                     text = { Text("Ответить") },
                     onClick = { MessageStore.startReply(message.id); menuOpen = false },
                 )
+                DropdownMenuItem(
+                    text = { Text("Переслать") },
+                    onClick = {
+                        ForwardBus.start(MessageStore.currentChatId(), longArrayOf(message.id))
+                        menuOpen = false
+                    },
+                )
+                if (message.isMine && message.text.isNotBlank()) {
+                    DropdownMenuItem(
+                        text = { Text("Изменить") },
+                        onClick = { MessageStore.startEdit(message.id); menuOpen = false },
+                    )
+                }
                 if (message.text.isNotBlank()) {
                     DropdownMenuItem(
                         text = { Text("Копировать") },

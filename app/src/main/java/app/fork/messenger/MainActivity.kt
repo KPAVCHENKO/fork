@@ -8,7 +8,15 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,7 +24,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -75,12 +87,13 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Простая навигация: список чатов <-> открытый чат <-> профиль <-> настройки. */
+/** Навигация: список ↔ чат ↔ профиль ↔ настройки ↔ новый чат ↔ пересылка. */
 @Composable
 private fun MainNavigation() {
     var openChatId by rememberSaveable { mutableStateOf<Long?>(null) }
     var infoChatId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showNewChat by rememberSaveable { mutableStateOf(false) }
 
     // Открытие чата по тапу на уведомление.
     val pending by Navigator.pendingChat.collectAsStateWithLifecycle()
@@ -89,13 +102,29 @@ private fun MainNavigation() {
             openChatId = it
             infoChatId = null
             showSettings = false
+            showNewChat = false
             Navigator.consume()
         }
     }
 
+    // Запрос пересылки из меню сообщения.
+    val forward by ForwardBus.request.collectAsStateWithLifecycle()
+
     val chatId = openChatId
     val info = infoChatId
     when {
+        forward != null -> ForwardPickerScreen(
+            onBack = { ForwardBus.clear() },
+            onPick = { target ->
+                forward?.let { MessageStore.forwardMessages(it.fromChatId, target, it.messageIds) }
+                ForwardBus.clear()
+                openChatId = target
+            },
+        )
+        showNewChat -> NewChatScreen(
+            onBack = { showNewChat = false },
+            onOpenChat = { showNewChat = false; openChatId = it },
+        )
         showSettings -> SettingsScreen(onBack = { showSettings = false })
         info != null -> ChatInfoScreen(chatId = info, onBack = { infoChatId = null })
         chatId != null -> ChatScreen(
@@ -103,9 +132,38 @@ private fun MainNavigation() {
             onBack = { openChatId = null },
             onOpenInfo = { infoChatId = it },
         )
-        else -> ChatListScreen(
-            onChatClick = { openChatId = it },
-            onSettings = { showSettings = true },
+        else -> Box(Modifier.fillMaxSize()) {
+            ChatListScreen(
+                onChatClick = { openChatId = it },
+                onSettings = { showSettings = true },
+            )
+            NewChatFab(
+                onClick = { showNewChat = true },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(20.dp),
+            )
+        }
+    }
+}
+
+/** Круглая градиентная кнопка «новый чат» (Fork Design Spec). */
+@Composable
+private fun NewChatFab(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(60.dp)
+            .clip(CircleShape)
+            .background(app.fork.messenger.ui.forkTokens.brandGradient)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            app.fork.messenger.ui.ForkIcons.Edit,
+            contentDescription = "новый чат",
+            tint = Color.White,
+            modifier = Modifier.size(26.dp),
         )
     }
 }
