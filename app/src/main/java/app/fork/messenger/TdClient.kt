@@ -8,6 +8,7 @@ import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import org.drinkless.tdlib.Client
 import org.drinkless.tdlib.TdApi
 
@@ -66,6 +67,13 @@ object TdClient {
     @Volatile
     private var client: Client? = null
     private lateinit var appContext: Context
+
+    // Сторож подключения: если долго не можем подключиться через активный прокси —
+    // перевыбираем самый быстрый рабочий из пула (авто-failover).
+    private val watchdogScope = kotlinx.coroutines.CoroutineScope(
+        kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default,
+    )
+    private var watchdogJob: kotlinx.coroutines.Job? = null
 
     @Synchronized
     fun start(context: Context) {
@@ -149,6 +157,11 @@ object TdClient {
                     is TdApi.ConnectionStateReady -> "подключено"
                     else -> obj.state.javaClass.simpleName
                 }
+                if (obj.state is TdApi.ConnectionStateReady) {
+                    watchdogJob?.cancel()
+                } else {
+                    armProxyWatchdog()
+                }
             }
 
             is TdApi.UpdateOption -> {
@@ -181,6 +194,10 @@ object TdClient {
                 _authState.value = AuthUiState.Ready
                 ChatStore.loadChats()
                 ChatStore.loadArchive()
+                // Пополняем пул прокси свежими рабочими из публичного канала.
+                if (::appContext.isInitialized) {
+                    app.fork.messenger.net.ProxyPool.refreshFromChannel(appContext)
+                }
                 // Подписка на пуши: дальше сервер Telegram будит нас через Firebase.
                 runCatching {
                     com.google.firebase.messaging.FirebaseMessaging.getInstance().token
@@ -269,37 +286,20 @@ object TdClient {
     }
 
     private fun ensureProxy() {
-        val endpoint = app.fork.messenger.net.ProxyConfig.current(appContext)
-        val host = endpoint.host
-        val port = endpoint.port
-        val secret = endpoint.secret
-        if (host.isBlank() || port == 0 || secret.isBlank()) {
-            Log.w(TAG, "proxy is not configured, skipping (direct connection)")
-            return
-        }
+        if (!::appContext.isInitialized) return
+        // Параллельно тестируем все прокси из пула и включаем самый быстрый рабочий.
+        app.fork.messenger.net.ProxyPool.selectAndEnable(appContext)
+    }
 
-        client?.send(TdApi.GetProxies()) { result ->
-            if (result !is TdApi.AddedProxies) return@send
-            val existing = result.proxies.firstOrNull {
-                it.proxy.server == host && it.proxy.port == port && it.proxy.type is TdApi.ProxyTypeMtproto
-            }
-            when {
-                existing == null -> {
-                    // Старые/чужие прокси убираем, чтобы не накапливались.
-                    result.proxies.forEach { client?.send(TdApi.RemoveProxy(it.id), null) }
-                    val proxy = TdApi.Proxy(host, port, TdApi.ProxyTypeMtproto(secret))
-                    client?.send(TdApi.AddProxy(proxy, true, "Railway")) { added ->
-                        if (added is TdApi.Error) {
-                            _lastError.value = "Прокси: ${humanReadableError(added)}"
-                        } else {
-                            Log.i(TAG, "proxy added and enabled")
-                        }
-                    }
-                }
-
-                !existing.isEnabled -> client?.send(TdApi.EnableProxy(existing.id), null)
-
-                else -> Log.i(TAG, "proxy already configured and enabled")
+    /** Если 12с не удаётся подключиться — перевыбираем рабочий прокси из пула. */
+    private fun armProxyWatchdog() {
+        if (watchdogJob?.isActive == true) return
+        if (!::appContext.isInitialized) return
+        watchdogJob = watchdogScope.launch {
+            kotlinx.coroutines.delay(12_000)
+            if (_connectionState.value != "подключено") {
+                Log.w(TAG, "still not connected — re-selecting proxy")
+                app.fork.messenger.net.ProxyPool.selectAndEnable(appContext)
             }
         }
     }
