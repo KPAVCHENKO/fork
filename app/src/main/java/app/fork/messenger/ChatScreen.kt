@@ -20,6 +20,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -393,6 +394,44 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
                     hasMediaAbove = !isText,
                     showText = isText || caption != null,
                 )
+
+                if (message.reactions.isNotEmpty()) {
+                    Spacer(Modifier.height(4.dp))
+                    ReactionChips(message.id, message.reactions, mine = message.isMine)
+                }
+            }
+        }
+    }
+}
+
+/** Чипы реакций под пузырём; тап по чипу — поставить/снять свою реакцию. */
+@Composable
+private fun ReactionChips(messageId: Long, reactions: List<UiReaction>, mine: Boolean) {
+    val tokens = forkTokens
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.padding(horizontal = if (mine) 0.dp else 4.dp),
+    ) {
+        reactions.take(6).forEach { r ->
+            val bg = if (r.chosen) tokens.checkCyan.copy(alpha = 0.22f)
+            else MaterialTheme.colorScheme.surfaceContainerHigh
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(percent = 50))
+                    .background(bg)
+                    .clickable { MessageStore.toggleReaction(messageId, r.emoji) }
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            ) {
+                Text(r.emoji, style = MaterialTheme.typography.labelMedium)
+                if (r.count > 1) {
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        r.count.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (r.chosen) tokens.checkCyan else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

@@ -2,9 +2,11 @@ package app.fork.messenger
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.DropdownMenu
@@ -98,6 +100,22 @@ fun MessageRow(
             MessageBubble(message, onOpenMedia)
 
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                // Быстрый ряд эмодзи-реакций.
+                Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                    listOf("👍", "❤️", "🔥", "😁", "😢", "👏").forEach { emoji ->
+                        Text(
+                            emoji,
+                            modifier = Modifier
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .clickable {
+                                    MessageStore.toggleReaction(message.id, emoji)
+                                    menuOpen = false
+                                }
+                                .padding(6.dp),
+                            style = MaterialTheme.typography.titleLarge,
+                        )
+                    }
+                }
                 DropdownMenuItem(
                     text = { Text("Ответить") },
                     onClick = { MessageStore.startReply(message.id); menuOpen = false },
