@@ -91,6 +91,10 @@ object MessageStore {
     private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
     val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
 
+    /** id чата, под который собрана текущая лента (фильтр от мелькания старого чата). */
+    private val _openedChat = MutableStateFlow(0L)
+    val openedChat: StateFlow<Long> = _openedChat.asStateFlow()
+
     private val _title = MutableStateFlow("")
     val title: StateFlow<String> = _title.asStateFlow()
 
@@ -136,6 +140,7 @@ object MessageStore {
             historyEnded = false
         }
         _messages.value = emptyList()
+        _openedChat.value = id
 
         val chat = ChatStore.chat(id)
         _title.value = chat?.title ?: ""

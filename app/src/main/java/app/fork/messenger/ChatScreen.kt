@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -107,10 +108,13 @@ import kotlinx.coroutines.launch
 import org.drinkless.tdlib.TdApi
 
 /** Экран переписки (Fork Design Spec §4.3). */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
-    val messages by MessageStore.messages.collectAsStateWithLifecycle()
+    val rawMessages by MessageStore.messages.collectAsStateWithLifecycle()
+    val openedChat by MessageStore.openedChat.collectAsStateWithLifecycle()
+    // Первый кадр нового чата не должен показывать ленту предыдущего.
+    val messages = if (openedChat == chatId) rawMessages else emptyList()
     val header by MessageStore.header.collectAsStateWithLifecycle()
     val loading by MessageStore.loadingHistory.collectAsStateWithLifecycle()
     val tokens = forkTokens
@@ -138,8 +142,12 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var topMenuOpen by remember { mutableStateOf(false) }
 
+    // Назад: сперва закрыть клавиатуру, потом выбор/поиск, и только потом выйти из чата.
+    val imeVisible = WindowInsets.isImeVisible
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     BackHandler {
         when {
+            imeVisible -> keyboard?.hide()
             selectionMode -> selection.clear()
             searchMode -> {
                 searchMode = false

@@ -71,8 +71,11 @@ fun MessageRow(
         return
     }
 
-    val triggerPx = with(androidx.compose.ui.platform.LocalDensity.current) { 64.dp.toPx() }
-    val maxPx = with(androidx.compose.ui.platform.LocalDensity.current) { 96.dp.toPx() }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val triggerPx = with(density) { 56.dp.toPx() }
+    val maxPx = with(density) { 88.dp.toPx() }
+    // Мёртвая зона: случайные горизонтальные движения не дёргают свайп-ответ.
+    val deadZonePx = with(density) { 30.dp.toPx() }
 
     Box {
         // Иконка ответа в круге проявляется и растёт по мере свайпа (Fork Design Spec §6).
@@ -103,15 +106,22 @@ fun MessageRow(
             modifier = Modifier
                 .graphicsLayer { translationX = offsetX.value }
                 .pointerInput(message.id) {
+                    var raw = 0f
                     detectHorizontalDragGestures(
+                        onDragStart = { raw = 0f },
+                        onDragCancel = { scope.launch { offsetX.animateTo(0f) } },
                         onDragEnd = {
                             if (offsetX.value > triggerPx) MessageStore.startReply(message.id)
                             scope.launch { offsetX.animateTo(0f) }
                         },
                     ) { change, drag ->
-                        change.consume()
-                        val next = (offsetX.value + drag).coerceIn(0f, maxPx)
-                        scope.launch { offsetX.snapTo(next) }
+                        raw += drag
+                        // Смещение начинается после мёртвой зоны, с сопротивлением ×0.75.
+                        val next = ((raw - deadZonePx).coerceAtLeast(0f) * 0.75f).coerceAtMost(maxPx)
+                        if (next > 0f || offsetX.value > 0f) {
+                            change.consume()
+                            scope.launch { offsetX.snapTo(next) }
+                        }
                     }
                 }
                 .combinedClickable(

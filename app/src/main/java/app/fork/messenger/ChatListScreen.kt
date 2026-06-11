@@ -57,6 +57,7 @@ import app.fork.messenger.ui.BrandIndigo
 import app.fork.messenger.ui.TimestampStyle
 import app.fork.messenger.ui.UnreadBadge
 import app.fork.messenger.ui.forkTokens
+import kotlinx.coroutines.launch
 
 /** Главный экран — список чатов (Fork Design Spec §4.2). */
 @Composable
@@ -72,7 +73,7 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenAr
 
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    var tab by rememberSaveable { mutableStateOf(0) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     LaunchedEffect(query, searching) {
         if (searching) SearchStore.search(query) else SearchStore.clear()
@@ -102,21 +103,25 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenAr
             return@Column
         }
 
-        // Вкладки = настоящие папки Telegram пользователя (как в оригинальном клиенте).
+        // Вкладки = настоящие папки Telegram; между ними можно свайпать (как в Telegram).
         val tabs = listOf("Все") + folders.map { it.title }
-        val safeTab = tab.coerceIn(0, tabs.lastIndex)
+        val pagerState = androidx.compose.foundation.pager.rememberPagerState { tabs.size }
+        val safeTab = pagerState.currentPage.coerceIn(0, tabs.lastIndex)
+        val onTab: (Int) -> Unit = { index ->
+            scope.launch { pagerState.animateScrollToPage(index) }
+        }
         when (tokens.style) {
             SettingsStore.ThemeStyle.AURORA -> AuroraHeader(
                 title = title, tabs = tabs, tab = safeTab,
-                onTab = { tab = it }, onSearch = { searching = true }, onSettings = onSettings,
+                onTab = onTab, onSearch = { searching = true }, onSettings = onSettings,
             )
             SettingsStore.ThemeStyle.FROST -> FrostHeader(
                 title = title, tabs = tabs, tab = safeTab,
-                onTab = { tab = it }, onSearch = { searching = true }, onSettings = onSettings,
+                onTab = onTab, onSearch = { searching = true }, onSettings = onSettings,
             )
             SettingsStore.ThemeStyle.NEON -> NeonHeader(
                 title = title, tabs = tabs, tab = safeTab,
-                onTab = { tab = it }, onSearch = { searching = true }, onSettings = onSettings,
+                onTab = onTab, onSearch = { searching = true }, onSettings = onSettings,
             )
         }
 
@@ -125,29 +130,35 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenAr
             UpdateBanner(version = available.release.version, onClick = onSettings)
         }
 
-        val filtered = if (safeTab == 0) {
-            chats
-        } else {
-            folderChats[folders.getOrNull(safeTab - 1)?.id].orEmpty()
-        }
-
-        if (filtered.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                if (loading && chats.isEmpty()) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                } else {
-                    ForkEmptyState(title = "Пока тишина", subtitle = "Начните первый чат")
-                }
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            beyondViewportPageCount = 1,
+        ) { page ->
+            val filtered = if (page == 0) {
+                chats
+            } else {
+                folderChats[folders.getOrNull(page - 1)?.id].orEmpty()
             }
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                if (safeTab == 0 && archive.isNotEmpty()) {
-                    item(key = "archive_entry") {
-                        ArchiveEntry(count = archive.sumOf { it.unread }, onClick = onOpenArchive)
+
+            if (filtered.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (loading && chats.isEmpty()) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    } else {
+                        ForkEmptyState(title = "Пока тишина", subtitle = "Начните первый чат")
                     }
                 }
-                items(filtered, key = { it.id }) { chat ->
-                    ChatRow(chat = chat, onClick = { onChatClick(chat.id) })
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    if (page == 0 && archive.isNotEmpty()) {
+                        item(key = "archive_entry", contentType = "archive") {
+                            ArchiveEntry(count = archive.sumOf { it.unread }, onClick = onOpenArchive)
+                        }
+                    }
+                    items(filtered, key = { it.id }, contentType = { "chat" }) { chat ->
+                        ChatRow(chat = chat, onClick = { onChatClick(chat.id) })
+                    }
                 }
             }
         }
