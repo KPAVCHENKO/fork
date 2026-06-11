@@ -57,7 +57,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: оптимизация и урезание кода — заметно поднимает плавность
+            // Compose на слабых устройствах. TDLib защищён правилами keep.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             signingConfig = signingConfigs.findByName("release")
         }
     }

@@ -141,6 +141,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     val amoled by SettingsStore.amoled.collectAsStateWithLifecycle()
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var topMenuOpen by remember { mutableStateOf(false) }
+    var stickerSetId by remember { mutableStateOf<Long?>(null) }
 
     // Назад: сперва закрыть клавиатуру, потом выбор/поиск, и только потом выйти из чата.
     val imeVisible = WindowInsets.isImeVisible
@@ -384,7 +385,11 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                 ) {
-                    itemsIndexed(reversed, key = { _, m -> m.id }) { index, message ->
+                    itemsIndexed(
+                        reversed,
+                        key = { _, m -> m.id },
+                        contentType = { _, _ -> "message" },
+                    ) { index, message ->
                         val older = reversed.getOrNull(index + 1)
                         Column {
                             if (older == null || older.dateLabel != message.dateLabel) {
@@ -399,6 +404,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                     if (message.id in selection) selection.remove(message.id)
                                     else selection.add(message.id)
                                 },
+                                onOpenStickerSet = { stickerSetId = it },
                             )
                         }
                     }
@@ -482,6 +488,14 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
 
         if (showWallpaperSheet) {
             WallpaperSheet(chatId = chatId, onDismiss = { showWallpaperSheet = false })
+        }
+
+        stickerSetId?.let { setId ->
+            app.fork.messenger.media.StickerSetSheet(
+                setId = setId,
+                onDismiss = { stickerSetId = null },
+                onPick = { MessageStore.sendSticker(it) },
+            )
         }
     }
 }
@@ -665,7 +679,11 @@ private fun DateCapsule(label: String) {
 }
 
 @Composable
-fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
+fun MessageBubble(
+    message: UiMessage,
+    onOpenMedia: (MediaTarget) -> Unit,
+    onOpenStickerSet: (Long) -> Unit = {},
+) {
     val tokens = forkTokens
     val content = message.content
 
@@ -675,7 +693,10 @@ fun MessageBubble(message: UiMessage, onOpenMedia: (MediaTarget) -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
             horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start,
         ) {
-            StickerContent(content.sticker)
+            // Тап по стикеру открывает его набор (как в Telegram).
+            StickerContent(content.sticker) {
+                if (content.sticker.setId != 0L) onOpenStickerSet(content.sticker.setId)
+            }
         }
         return
     }

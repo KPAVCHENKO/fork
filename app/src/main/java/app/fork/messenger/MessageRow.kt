@@ -46,6 +46,7 @@ fun MessageRow(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onToggleSelect: (() -> Unit)? = null,
+    onOpenStickerSet: (Long) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
@@ -66,7 +67,7 @@ fun MessageRow(
                     onLongClick = { onToggleSelect?.invoke() },
                 ),
         ) {
-            MessageBubble(message, onOpenMedia)
+            MessageBubble(message, onOpenMedia, onOpenStickerSet)
         }
         return
     }
@@ -129,7 +130,7 @@ fun MessageRow(
                     onLongClick = { menuOpen = true },
                 ),
         ) {
-            MessageBubble(message, onOpenMedia)
+            MessageBubble(message, onOpenMedia, onOpenStickerSet)
 
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 // Быстрый ряд эмодзи-реакций.

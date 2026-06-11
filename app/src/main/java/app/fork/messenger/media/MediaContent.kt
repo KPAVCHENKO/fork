@@ -398,8 +398,14 @@ fun DocumentContent(document: TdApi.Document, mine: Boolean = false) {
 }
 
 @Composable
-fun StickerContent(sticker: TdApi.Sticker) {
-    StickerView(sticker, modifier = Modifier.size(140.dp), play = true)
+fun StickerContent(sticker: TdApi.Sticker, onClick: (() -> Unit)? = null) {
+    StickerView(
+        sticker,
+        modifier = Modifier
+            .size(140.dp)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        play = true,
+    )
 }
 
 /**
