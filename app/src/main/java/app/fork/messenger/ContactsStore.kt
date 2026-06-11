@@ -51,6 +51,24 @@ object ContactsStore {
         }
     }
 
+    /** Создаёт обычную группу с выбранными участниками. */
+    fun createGroup(title: String, memberIds: LongArray, onCreated: (Long) -> Unit) {
+        if (title.isBlank()) return
+        TdClient.send(TdApi.CreateNewBasicGroupChat(memberIds, title.trim(), 0)) { result ->
+            if (result is TdApi.CreatedBasicGroupChat) onCreated(result.chatId)
+        }
+    }
+
+    /** Создаёт канал; участников канал набирает позже по ссылке/инвайтам. */
+    fun createChannel(title: String, description: String, onCreated: (Long) -> Unit) {
+        if (title.isBlank()) return
+        TdClient.send(
+            TdApi.CreateNewSupergroupChat(title.trim(), false, true, description.trim(), null, 0, false),
+        ) { result ->
+            if (result is TdApi.Chat) onCreated(result.id)
+        }
+    }
+
     private fun rebuild() {
         _contacts.value = userIds.toList().mapNotNull { id ->
             val user = UserCache.user(id) ?: return@mapNotNull null

@@ -95,6 +95,8 @@ private fun MainNavigation() {
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showNewChat by rememberSaveable { mutableStateOf(false) }
     var showArchive by rememberSaveable { mutableStateOf(false) }
+    // null — не показывать; false — группа; true — канал.
+    var createChannel by rememberSaveable { mutableStateOf<Boolean?>(null) }
 
     // Открытие чата по тапу на уведомление.
     val pending by Navigator.pendingChat.collectAsStateWithLifecycle()
@@ -122,9 +124,16 @@ private fun MainNavigation() {
                 openChatId = target
             },
         )
+        createChannel != null -> CreateChatScreen(
+            isChannel = createChannel == true,
+            onBack = { createChannel = null },
+            onCreated = { createChannel = null; showNewChat = false; openChatId = it },
+        )
         showNewChat -> NewChatScreen(
             onBack = { showNewChat = false },
             onOpenChat = { showNewChat = false; openChatId = it },
+            onCreateGroup = { createChannel = false },
+            onCreateChannel = { createChannel = true },
         )
         showArchive -> ArchiveScreen(
             onBack = { showArchive = false },

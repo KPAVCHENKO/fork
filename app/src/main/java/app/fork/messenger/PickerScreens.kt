@@ -101,14 +101,33 @@ private fun PickerRow(
     }
 }
 
-/** Новый чат: «Избранное» + список контактов. */
+/** Новый чат: создать группу/канал, «Избранное» + список контактов. */
 @Composable
-fun NewChatScreen(onBack: () -> Unit, onOpenChat: (Long) -> Unit) {
+fun NewChatScreen(
+    onBack: () -> Unit,
+    onOpenChat: (Long) -> Unit,
+    onCreateGroup: () -> Unit = {},
+    onCreateChannel: () -> Unit = {},
+) {
     LaunchedEffect(Unit) { ContactsStore.load() }
     val contacts by ContactsStore.contacts.collectAsStateWithLifecycle()
 
     PickerScaffold(title = "Новый чат", onBack = onBack) {
         LazyColumn(Modifier.fillMaxSize()) {
+            item(key = "create_group") {
+                CreateEntryRow(
+                    title = "Создать группу",
+                    icon = ForkIcons.Group,
+                    onClick = onCreateGroup,
+                )
+            }
+            item(key = "create_channel") {
+                CreateEntryRow(
+                    title = "Создать канал",
+                    icon = ForkIcons.Megaphone,
+                    onClick = onCreateChannel,
+                )
+            }
             item(key = "saved") {
                 Row(
                     modifier = Modifier
@@ -150,6 +169,168 @@ fun NewChatScreen(onBack: () -> Unit, onOpenChat: (Long) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** Строка-действие «Создать группу/канал» в дизайн-языке Fork. */
+@Composable
+private fun CreateEntryRow(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(50.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(app.fork.messenger.ui.forkTokens.brandGradient),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(title, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+/**
+ * Создание группы или канала: название (+описание для канала),
+ * для группы — мультивыбор участников из контактов.
+ */
+@Composable
+fun CreateChatScreen(isChannel: Boolean, onBack: () -> Unit, onCreated: (Long) -> Unit) {
+    LaunchedEffect(Unit) { ContactsStore.load() }
+    val contacts by ContactsStore.contacts.collectAsStateWithLifecycle()
+    var title by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    var description by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    val selected = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateListOf<Long>() }
+    var creating by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    PickerScaffold(title = if (isChannel) "Новый канал" else "Новая группа", onBack = onBack) {
+        Column(Modifier.fillMaxSize()) {
+            CreateField(
+                value = title,
+                onValue = { title = it },
+                placeholder = if (isChannel) "Название канала" else "Название группы",
+            )
+            if (isChannel) {
+                CreateField(value = description, onValue = { description = it }, placeholder = "Описание (необязательно)")
+            }
+
+            if (!isChannel) {
+                Text(
+                    if (selected.isEmpty()) "Участники" else "Участники: ${selected.size}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                LazyColumn(Modifier.weight(1f)) {
+                    items(contacts, key = { it.userId }) { c ->
+                        val isSelected = c.userId in selected
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (isSelected) selected.remove(c.userId) else selected.add(c.userId)
+                                }
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            ForkAvatar(size = 44.dp, avatarPath = null, initials = c.initials, seed = c.userId, online = c.isOnline)
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                c.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    ForkIcons.Check,
+                                    contentDescription = "выбран",
+                                    tint = app.fork.messenger.ui.forkTokens.checkCyan,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+
+            // Кнопка создания — фирменный градиент (серая, пока нет названия).
+            val enabled = title.isNotBlank() && !creating
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .height(52.dp)
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+                    .then(
+                        if (enabled) {
+                            Modifier
+                                .background(app.fork.messenger.ui.forkTokens.brandGradient)
+                                .clickable {
+                                    creating = true
+                                    if (isChannel) {
+                                        ContactsStore.createChannel(title, description) { onCreated(it) }
+                                    } else {
+                                        ContactsStore.createGroup(title, selected.toLongArray()) { onCreated(it) }
+                                    }
+                                }
+                        } else {
+                            Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                        },
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    when {
+                        creating -> "Создание…"
+                        isChannel -> "Создать канал"
+                        else -> "Создать группу"
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Поле ввода в стиле Fork (капсула). */
+@Composable
+private fun CreateField(value: String, onValue: (String) -> Unit, placeholder: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .height(52.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(26.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(horizontal = 18.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (value.isEmpty()) {
+            Text(
+                placeholder,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            )
+        }
+        androidx.compose.foundation.text.BasicTextField(
+            value = value,
+            onValueChange = onValue,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
