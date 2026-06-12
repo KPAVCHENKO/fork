@@ -247,8 +247,24 @@ object TdClient {
                 }
             }
 
+            is TdApi.AuthorizationStateClosed -> {
+                // LogOut завершён: TDLib закрыт и локальные данные удалены. Создаём
+                // нового клиента — он заново инициализируется и покажет экран входа.
+                client = Client.create(
+                    { obj -> onUpdate(obj) },
+                    { e -> Log.e(TAG, "exception in update handler", e) },
+                    { e -> Log.e(TAG, "exception in result handler", e) },
+                )
+                client?.send(TdApi.GetOption("version"), null)
+            }
+
             else -> _authState.value = AuthUiState.Unsupported(state.javaClass.simpleName)
         }
+    }
+
+    /** Выход из аккаунта: TDLib удаляет локальные данные и закрывается (см. Closed). */
+    fun logOut() {
+        send(TdApi.LogOut())
     }
 
     private fun sendTdlibParameters() {

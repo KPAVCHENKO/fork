@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -12,12 +11,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import coil.compose.AsyncImage
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
@@ -34,29 +27,21 @@ import org.drinkless.tdlib.TdApi
  *
  * Performance model:
  *  - A static thumbnail (Coil) is ALWAYS the base layer, so a sticker is never
- *    invisible and the cheap path is taken while scrolling.
- *  - The expensive animated layer (Lottie for TGS, ExoPlayer for WEBM) is only
- *    composed when [play] is true. Callers pass play=false during fling, so no
- *    players/compositions are created while the list is moving.
- *  - A global semaphore caps concurrent animations (MAX_CONCURRENT). Stickers
- *    over the cap fall back to the static thumbnail until a slot frees up.
+ *    invisible while an engine warms up.
+ *  - TGS animates via native rlottie, WEBM via the VP9-with-alpha engine
+ *    (WebmSticker.kt). BOTH render bitmaps in the Compose draw phase only —
+ *    no AndroidView/SurfaceView — so they animate even while scrolling without
+ *    janking the list (same model as Telegram).
+ *  - A global cap bounds concurrent WEBM decoder pairs; stickers over the cap
+ *    show the static thumbnail until a slot frees up.
  *  - Gunzipped TGS JSON is cached by file path to avoid re-reading/inflating on
  *    every scroll-back.
  */
 
-// Cap simultaneous WEBM players. Each is an ExoPlayer (VP9 decoder) rendering into a
-// TextureView. Profiling showed that decoding several VP9 video stickers live WHILE the
-// list flings spikes the UI thread (58% janky) no matter the surface type — the cost is
-// the decode + frame upload, not the surface. So WEBM only plays once the list is at
-// rest (like Telegram on weak devices); the TextureView still fixes the old SurfaceView
-// "pops to a square for a frame" glitch and renders sticker transparency correctly.
-private const val MAX_CONCURRENT_ANIMATIONS = 4
+// Cap simultaneous WEBM engines (each runs two VP9 MediaCodec instances). A chat
+// screen rarely shows more than ~6 video stickers at once.
+private const val MAX_CONCURRENT_ANIMATIONS = 6
 private val activeAnimations = AtomicInteger(0)
-
-// A WEBM player starts shortly after scrolling settles. Kept low so playback feels
-// near-instant (was 400 ms — felt like a half-second lag), but non-zero so a quick
-// flick-through doesn't spin up VP9 decoders on every micro-pause.
-private const val WEBM_IDLE_DELAY_MS = 130L
 
 /** path -> inflated Lottie JSON, so scrolling back doesn't re-inflate. */
 private val tgsJsonCache = android.util.LruCache<String, String>(24)
@@ -90,25 +75,11 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
     val state = rememberFileState(sticker.sticker, autoDownload = true, priority = 24)
     val path = state.path
 
-    // WEBM "goes live" only after the list settles (debounce) so flinging never spins up
-    // VP9 decoders mid-scroll. TGS (rlottie) animates always; WEBM waits for rest.
-    var webmReady by remember { mutableStateOf(false) }
-    if (isWebm) {
-        LaunchedEffect(play) {
-            webmReady = if (play) {
-                kotlinx.coroutines.delay(WEBM_IDLE_DELAY_MS)
-                true
-            } else {
-                false
-            }
-        }
-    }
-
-    // Concurrency slot only for heavy WEBM (ExoPlayer). rlottie is bounded by its own
-    // render pool, so TGS doesn't need a slot.
+    // Concurrency slot only for WEBM (two MediaCodec instances each). rlottie is
+    // bounded by its own render pool, so TGS doesn't need a slot.
     var hasSlot by remember { mutableStateOf(false) }
-    DisposableEffect(isWebm, webmReady, path) {
-        if (isWebm && webmReady && path != null && !hasSlot &&
+    DisposableEffect(isWebm, path) {
+        if (isWebm && path != null && !hasSlot &&
             activeAnimations.get() < MAX_CONCURRENT_ANIMATIONS
         ) {
             activeAnimations.incrementAndGet()
@@ -133,11 +104,12 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
             )
         }
         when {
-            // TGS animates ALWAYS via rlottie (cheap, draw-phase only — no SurfaceView).
+            // TGS animates ALWAYS via rlottie (cheap, draw-phase only).
             isTgs && path != null -> TgsView(path, play = true)
-            // WEBM via ExoPlayer into a TextureView (no SurfaceView jank/pop), but only
-            // once the list is at rest ([webmReady]) and within the concurrency cap.
-            isWebm && webmReady && path != null && hasSlot -> WebmView(path)
+            // WEBM animates ALWAYS via the VP9-with-alpha engine (draw-phase only,
+            // real transparency — no more black squares), bounded by the slot cap.
+            isWebm && path != null && hasSlot ->
+                WebmAlphaView(path, modifier = Modifier.fillMaxSize())
             // static WEBP is already shown as the base image above.
         }
     }
@@ -169,32 +141,4 @@ private fun TgsView(path: String, play: Boolean) {
             modifier = Modifier.fillMaxSize(),
         )
     }
-}
-
-@OptIn(UnstableApi::class)
-@Composable
-private fun WebmView(path: String) {
-    val context = LocalContext.current
-    val player = remember(path) {
-        ExoPlayer.Builder(context).build().apply {
-            setMediaItem(MediaItem.fromUri(android.net.Uri.fromFile(File(path))))
-            repeatMode = Player.REPEAT_MODE_ALL
-            volume = 0f
-            prepare()
-            playWhenReady = true
-        }
-    }
-    DisposableEffect(player) { onDispose { player.release() } }
-    // TextureView (not SurfaceView): composites in-hierarchy, supports transparency, and
-    // respects the composable's bounds — so video stickers don't flash a square frame or
-    // jank the scroll. ExoPlayer renders straight into it.
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { ctx ->
-            android.view.TextureView(ctx).also { tv ->
-                tv.isOpaque = false
-                player.setVideoTextureView(tv)
-            }
-        },
-    )
 }

@@ -2,7 +2,6 @@ package app.fork.messenger
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,12 +14,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -34,12 +37,16 @@ import app.fork.messenger.ui.ForkIcons
 import app.fork.messenger.ui.forkTokens
 import org.drinkless.tdlib.TdApi
 
-/** Вкладка «Профиль» (как в TG): аватар, имя, статус, телефон/username/био, ссылки. */
+/** Вкладка «Профиль» (как в TG): аватар, имя, статус, телефон/username/био + действия. */
 @Composable
 fun ProfileScreen(onOpenChat: (Long) -> Unit, onOpenSettings: () -> Unit) {
     var user by remember { mutableStateOf<TdApi.User?>(null) }
     var bio by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
+    var refresh by remember { mutableIntStateOf(0) }
+    var showEdit by remember { mutableStateOf(false) }
+    var showLogout by remember { mutableStateOf(false) }
+
+    LaunchedEffect(refresh) {
         TdClient.send(TdApi.GetMe()) { res ->
             (res as? TdApi.User)?.let { u ->
                 user = u
@@ -57,6 +64,9 @@ fun ProfileScreen(onOpenChat: (Long) -> Unit, onOpenSettings: () -> Unit) {
     val online = u?.status is TdApi.UserStatusOnline
     val phone = u?.phoneNumber?.let { if (it.startsWith("+")) it else "+$it" }
     val username = u?.usernames?.activeUsernames?.firstOrNull()
+    // Реальное фото профиля (качается через TDLib, до готовности — инициалы).
+    val avatarPath = app.fork.messenger.media
+        .rememberFileState(u?.profilePhoto?.small, autoDownload = true, priority = 8).path
 
     Column(
         Modifier
@@ -68,7 +78,7 @@ fun ProfileScreen(onOpenChat: (Long) -> Unit, onOpenSettings: () -> Unit) {
         Spacer(Modifier.height(28.dp))
         ForkAvatar(
             size = 104.dp,
-            avatarPath = null,
+            avatarPath = avatarPath,
             initials = MessageFormat.initials(name),
             seed = (u?.id ?: name.hashCode().toLong()),
         )
@@ -102,11 +112,19 @@ fun ProfileScreen(onOpenChat: (Long) -> Unit, onOpenSettings: () -> Unit) {
 
         // Действия
         ProfileCard {
+            ActionRow(ForkIcons.Edit, "Изменить профиль") { showEdit = true }
+            Divider()
             ActionRow(ForkIcons.Archive, "Избранное") {
                 ContactsStore.openSavedMessages(onOpenChat)
             }
             Divider()
             ActionRow(ForkIcons.Settings, "Настройки", onClick = onOpenSettings)
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        ProfileCard {
+            ActionRow(ForkIcons.Close, "Выйти из аккаунта", danger = true) { showLogout = true }
         }
 
         Spacer(Modifier.height(24.dp))
@@ -117,6 +135,70 @@ fun ProfileScreen(onOpenChat: (Long) -> Unit, onOpenSettings: () -> Unit) {
         )
         Spacer(Modifier.height(24.dp))
     }
+
+    if (showEdit && u != null) {
+        EditProfileDialog(
+            firstName = u.firstName,
+            lastName = u.lastName,
+            bio = bio,
+            onDismiss = { showEdit = false },
+            onSave = { f, l, b ->
+                TdClient.send(TdApi.SetName(f.trim(), l.trim()))
+                TdClient.send(TdApi.SetBio(b.trim()))
+                showEdit = false
+                // Перечитываем профиль с небольшим запасом на применение.
+                refresh++
+            },
+        )
+    }
+
+    if (showLogout) {
+        AlertDialog(
+            onDismissRequest = { showLogout = false },
+            title = { Text("Выйти из аккаунта?") },
+            text = { Text("Локальные данные на этом устройстве будут удалены. Войти обратно можно по номеру телефона.") },
+            confirmButton = {
+                TextButton(onClick = { showLogout = false; TdClient.logOut() }) {
+                    Text("Выйти", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogout = false }) { Text("Отмена") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun EditProfileDialog(
+    firstName: String,
+    lastName: String,
+    bio: String,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String) -> Unit,
+) {
+    var f by remember { mutableStateOf(firstName) }
+    var l by remember { mutableStateOf(lastName) }
+    var b by remember { mutableStateOf(bio) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Изменить профиль") },
+        text = {
+            Column {
+                OutlinedTextField(value = f, onValueChange = { f = it }, label = { Text("Имя") }, singleLine = true)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(value = l, onValueChange = { l = it }, label = { Text("Фамилия") }, singleLine = true)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(value = b, onValueChange = { b = it }, label = { Text("О себе") }, maxLines = 3)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(f, l, b) }, enabled = f.isNotBlank()) { Text("Сохранить") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Отмена") }
+        },
+    )
 }
 
 @Composable
@@ -142,7 +224,13 @@ private fun InfoRow(label: String, value: String) {
 }
 
 @Composable
-private fun ActionRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, onClick: () -> Unit) {
+private fun ActionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    danger: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     Row(
         Modifier
             .fillMaxWidth()
@@ -150,9 +238,13 @@ private fun ActionRow(icon: androidx.compose.ui.graphics.vector.ImageVector, tit
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Icon(icon, contentDescription = null, tint = tint)
         Spacer(Modifier.width(16.dp))
-        Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
@@ -162,7 +254,6 @@ private fun Divider() {
         Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .padding(start = 0.dp)
             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
     )
 }

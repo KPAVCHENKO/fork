@@ -122,6 +122,10 @@ fun ContactsScreen(onOpenChat: (Long) -> Unit) {
 
 @Composable
 private fun ContactRow(contact: UiContact, onClick: () -> Unit) {
+    // Реальное фото профиля: маленький аватар качается через TDLib и подставляется,
+    // как только готов; до этого — цветные инициалы.
+    val photo = remember(contact.userId) { UserCache.user(contact.userId)?.profilePhoto?.small }
+    val avatarPath = app.fork.messenger.media.rememberFileState(photo, autoDownload = true, priority = 8).path
     Row(
         Modifier
             .fillMaxWidth()
@@ -131,7 +135,7 @@ private fun ContactRow(contact: UiContact, onClick: () -> Unit) {
     ) {
         ForkAvatar(
             size = 50.dp,
-            avatarPath = null,
+            avatarPath = avatarPath,
             initials = contact.initials,
             seed = contact.userId,
         )

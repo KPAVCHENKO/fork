@@ -239,7 +239,12 @@ fun CreateChatScreen(isChannel: Boolean, onBack: () -> Unit, onCreated: (Long) -
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            ForkAvatar(size = 44.dp, avatarPath = null, initials = c.initials, seed = c.userId, online = c.isOnline)
+                            val cPhoto = androidx.compose.runtime.remember(c.userId) {
+                                UserCache.user(c.userId)?.profilePhoto?.small
+                            }
+                            val cAvatar = app.fork.messenger.media
+                                .rememberFileState(cPhoto, autoDownload = true, priority = 8).path
+                            ForkAvatar(size = 44.dp, avatarPath = cAvatar, initials = c.initials, seed = c.userId, online = c.isOnline)
                             Spacer(Modifier.width(12.dp))
                             Text(
                                 c.name,
