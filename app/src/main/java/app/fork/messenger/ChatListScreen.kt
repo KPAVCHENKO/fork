@@ -61,7 +61,12 @@ import kotlinx.coroutines.launch
 
 /** Главный экран — список чатов (Fork Design Spec §4.2). */
 @Composable
-fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenArchive: () -> Unit = {}) {
+fun ChatListScreen(
+    onChatClick: (Long) -> Unit,
+    onSettings: () -> Unit,
+    onOpenArchive: () -> Unit = {},
+    onOpenProxy: () -> Unit = {},
+) {
     val chats by ChatStore.chatList.collectAsStateWithLifecycle()
     val archive by ChatStore.archiveList.collectAsStateWithLifecycle()
     val folders by ChatStore.folders.collectAsStateWithLifecycle()
@@ -113,15 +118,15 @@ fun ChatListScreen(onChatClick: (Long) -> Unit, onSettings: () -> Unit, onOpenAr
         when (tokens.style) {
             SettingsStore.ThemeStyle.AURORA -> AuroraHeader(
                 title = title, tabs = tabs, tab = safeTab,
-                onTab = onTab, onSearch = { searching = true }, onSettings = onSettings,
+                onTab = onTab, onSearch = { searching = true }, onSettings = onSettings, onProxy = onOpenProxy,
             )
             SettingsStore.ThemeStyle.FROST -> FrostHeader(
                 title = title, tabs = tabs, tab = safeTab,
-                onTab = onTab, onSearch = { searching = true }, onSettings = onSettings,
+                onTab = onTab, onSearch = { searching = true }, onSettings = onSettings, onProxy = onOpenProxy,
             )
             SettingsStore.ThemeStyle.NEON -> NeonHeader(
                 title = title, tabs = tabs, tab = safeTab,
-                onTab = onTab, onSearch = { searching = true }, onSettings = onSettings,
+                onTab = onTab, onSearch = { searching = true }, onSettings = onSettings, onProxy = onOpenProxy,
             )
         }
 
@@ -208,6 +213,7 @@ private fun AuroraHeader(
     onTab: (Int) -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
+    onProxy: () -> Unit,
 ) {
     val tokens = forkTokens
     Box(
@@ -227,6 +233,22 @@ private fun AuroraHeader(
                 Spacer(Modifier.width(8.dp))
                 Text(title, style = MaterialTheme.typography.titleLarge, color = Color.White)
                 Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.2f))
+                        .clickable(onClick = onProxy),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        ForkIcons.Shield,
+                        contentDescription = "прокси",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier
                         .size(34.dp)
@@ -268,6 +290,7 @@ private fun FrostHeader(
     onTab: (Int) -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
+    onProxy: () -> Unit,
 ) {
     val tokens = forkTokens
     val shape = RoundedCornerShape(28.dp)
@@ -288,6 +311,14 @@ private fun FrostHeader(
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.weight(1f))
+                IconButton(onClick = onProxy, modifier = Modifier.size(38.dp)) {
+                    Icon(
+                        ForkIcons.Shield,
+                        contentDescription = "прокси",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
                 IconButton(onClick = onSettings, modifier = Modifier.size(38.dp)) {
                     Icon(
                         ForkIcons.Settings,
@@ -323,6 +354,7 @@ private fun NeonHeader(
     onTab: (Int) -> Unit,
     onSearch: () -> Unit,
     onSettings: () -> Unit,
+    onProxy: () -> Unit,
 ) {
     Column(Modifier.statusBarsPadding().padding(start = 20.dp, end = 20.dp, top = 12.dp)) {
         Text(
@@ -341,6 +373,8 @@ private fun NeonHeader(
             )
             Spacer(Modifier.weight(1f))
             NeonRoundButton(icon = { Icon(ForkIcons.Search, contentDescription = "поиск", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp)) }, onClick = onSearch)
+            Spacer(Modifier.width(10.dp))
+            NeonRoundButton(icon = { Icon(ForkIcons.Shield, contentDescription = "прокси", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(19.dp)) }, onClick = onProxy)
             Spacer(Modifier.width(10.dp))
             NeonRoundButton(icon = { Icon(ForkIcons.Settings, contentDescription = "настройки", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp)) }, onClick = onSettings)
         }

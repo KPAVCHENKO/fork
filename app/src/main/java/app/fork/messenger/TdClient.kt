@@ -318,11 +318,35 @@ object TdClient {
 
     private fun ensureProxy() {
         if (!::appContext.isInitialized) return
-        // Enable the primary proxy IMMEDIATELY (no round-trip) so it is active for
-        // TDLib's very first connection attempt — avoids a doomed direct attempt that
-        // times out on RF DPI and eats ~10s. Cleanup of stale proxies is deferred to
-        // after ConnectionStateReady.
-        app.fork.messenger.net.ProxyPool.enablePrimaryFast(appContext)
+        if (app.fork.messenger.net.NetworkMonitor.isVpnActive()) {
+            // A VPN already bypasses the block — connect directly (no proxy) to avoid
+            // the extra proxy hop's latency. Fall back to a proxy if direct fails.
+            app.fork.messenger.net.ProxyPool.goDirect(appContext)
+            armProxyWatchdog(initialDelayMs = 7_000)
+        } else {
+            // Enable the primary proxy IMMEDIATELY (no round-trip) so it is active for
+            // TDLib's very first connection attempt — avoids a doomed direct attempt
+            // that times out on RF DPI. Stale-proxy cleanup is deferred to after Ready.
+            app.fork.messenger.net.ProxyPool.enablePrimaryFast(appContext)
+        }
+    }
+
+    /**
+     * VPN toggled. When ON, connect directly (the VPN bypasses the block, so a proxy
+     * only adds latency); a proxy is re-enabled automatically if direct doesn't come
+     * up. When OFF, re-enable the proxy (needed again against the DPI block).
+     */
+    fun onVpnChanged(vpn: Boolean) {
+        if (!::appContext.isInitialized) return
+        watchdogJob?.cancel()
+        lastSelectionMs = 0L
+        if (vpn) {
+            app.fork.messenger.net.ProxyPool.goDirect(appContext)
+            armProxyWatchdog(initialDelayMs = 7_000) // fallback to proxy if direct fails
+        } else {
+            app.fork.messenger.net.ProxyPool.enablePrimaryFast(appContext)
+            armProxyWatchdog(initialDelayMs = 12_000)
+        }
     }
 
     /**

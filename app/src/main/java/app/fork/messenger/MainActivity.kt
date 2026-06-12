@@ -95,6 +95,7 @@ private fun MainNavigation() {
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showNewChat by rememberSaveable { mutableStateOf(false) }
     var showArchive by rememberSaveable { mutableStateOf(false) }
+    var showProxy by rememberSaveable { mutableStateOf(false) }
     // null — не показывать; false — группа; true — канал.
     var createChannel by rememberSaveable { mutableStateOf<Boolean?>(null) }
 
@@ -139,6 +140,7 @@ private fun MainNavigation() {
             onBack = { showArchive = false },
             onOpenChat = { showArchive = false; openChatId = it },
         )
+        showProxy -> ProxyScreen(onBack = { showProxy = false })
         showSettings -> SettingsScreen(onBack = { showSettings = false })
         info != null -> ChatInfoScreen(
             chatId = info,
@@ -155,6 +157,7 @@ private fun MainNavigation() {
                 onChatClick = { openChatId = it },
                 onSettings = { showSettings = true },
                 onOpenArchive = { showArchive = true },
+                onOpenProxy = { showProxy = true },
             )
             NewChatFab(
                 onClick = { showNewChat = true },

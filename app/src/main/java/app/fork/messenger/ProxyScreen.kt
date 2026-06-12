@@ -83,26 +83,34 @@ fun ProxyScreen(onBack: () -> Unit) {
             colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
         )
 
-        // Status line: connection + VPN.
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                if (connection == "подключено") "Соединение: подключено" else "Соединение: $connection",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (connection == "подключено") tokens.checkCyan else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (NetworkMonitor.isVpnActive()) {
-                Spacer(Modifier.width(8.dp))
+        // Status line: connection + VPN/direct mode.
+        val vpn = NetworkMonitor.isVpnActive()
+        val direct = activeKey == null
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "VPN",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(percent = 50))
-                        .background(tokens.brandGradient)
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                    if (connection == "подключено") "Соединение: подключено" else "Соединение: $connection",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (connection == "подключено") tokens.checkCyan else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (vpn) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "VPN",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(percent = 50))
+                            .background(tokens.brandGradient)
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                    )
+                }
+            }
+            if (direct) {
+                Text(
+                    if (vpn) "Напрямую через VPN (без прокси — меньше задержка)" else "Напрямую, без прокси",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

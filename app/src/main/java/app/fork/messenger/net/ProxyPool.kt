@@ -48,8 +48,7 @@ object ProxyPool {
     private const val MAX_TEST_PARALLEL = 8   // candidates to try during failover
     private const val TEST_BATCH = 4          // batch size for "check all" (avoids storms)
     private const val LIVE_TRY_MS = 8000L     // wait for the real connection per candidate
-    private const val TEST_DC = 2
-    private const val TEST_TIMEOUT = 10.0
+    private const val PING_TIMEOUT_MS = 6000L
 
     /** Public channel that posts working proxies (user-provided). */
     private const val PROXY_CHANNEL = "telemtfreeproxy"
@@ -154,6 +153,17 @@ object ProxyPool {
         enableExact(context, Candidate(chosen.host, chosen.port, chosen.secret))
     }
 
+    /**
+     * Connect DIRECTLY (disable the proxy). Used when a VPN is active: the VPN already
+     * bypasses the block, so routing through a remote proxy only adds latency. TDLib
+     * then connects straight to Telegram through the VPN tunnel.
+     */
+    fun goDirect(context: Context) {
+        _activeKey.value = null
+        TdClient.send(TdApi.DisableProxy())
+        refreshEntries(context)
+    }
+
     // ---------- Auto failover / selection ----------
 
     /**
@@ -212,12 +222,11 @@ object ProxyPool {
                 for (batch in cands.chunked(TEST_BATCH)) {
                     batch.map { c ->
                         async {
-                            if (connected && c.key == active) {
-                                status[c.key] = Triple(true, -1, System.currentTimeMillis())
-                            } else {
-                                val (ok, ms) = testOne(c)
-                                status[c.key] = Triple(ok, if (ok) ms else -1, System.currentTimeMillis())
-                            }
+                            // PingProxy returns the REAL round-trip latency (like Telegram),
+                            // unlike TestProxy whose wall-time includes the whole handshake.
+                            val (ok, ms) = pingOne(c)
+                            val finalOk = ok || (connected && c.key == active)
+                            status[c.key] = Triple(finalOk, if (ok) ms else -1, System.currentTimeMillis())
                             refreshEntries(context)
                         }
                     }.awaitAll()
@@ -229,15 +238,18 @@ object ProxyPool {
         }
     }
 
-    /** One TestProxy as a suspend call; returns ok + latency ms. */
-    private suspend fun testOne(c: Candidate): Pair<Boolean, Int> {
-        val started = System.currentTimeMillis()
-        val deferred = CompletableDeferred<Boolean>()
-        TdClient.send(TdApi.TestProxy(proxyOf(c), TEST_DC, TEST_TIMEOUT)) { res ->
-            deferred.complete(res is TdApi.Ok)
+    /**
+     * PingProxy as a suspend call; returns (ok, realLatencyMs). PingProxy reports the
+     * actual round-trip ping (like Telegram's ~tens-of-ms numbers), unlike measuring
+     * TestProxy wall-time which folds in the whole TLS+DC handshake (seconds).
+     */
+    private suspend fun pingOne(c: Candidate): Pair<Boolean, Int> {
+        val deferred = CompletableDeferred<Pair<Boolean, Int>>()
+        TdClient.send(TdApi.PingProxy(proxyOf(c))) { res ->
+            if (res is TdApi.Seconds) deferred.complete(true to (res.seconds * 1000).toInt())
+            else deferred.complete(false to -1)
         }
-        val ok = withTimeoutOrNull((TEST_TIMEOUT * 1000).toLong() + 2000) { deferred.await() } ?: false
-        return ok to (System.currentTimeMillis() - started).toInt()
+        return withTimeoutOrNull(PING_TIMEOUT_MS) { deferred.await() } ?: (false to -1)
     }
 
     /** Make a specific candidate the single enabled proxy. */
@@ -310,23 +322,21 @@ object ProxyPool {
                 }
                 TdClient.send(TdApi.CloseChat(chat.id))
                 if (parsed.isEmpty()) return@send
-                val toTest = parsed.take(MAX_TEST_PARALLEL)
-                val good = java.util.Collections.synchronizedList(mutableListOf<Candidate>())
-                var pending = toTest.size
-                toTest.forEach { cand ->
-                    val started = System.currentTimeMillis()
-                    TdClient.send(TdApi.TestProxy(proxyOf(cand), TEST_DC, TEST_TIMEOUT)) { res ->
-                        pending--
-                        val ok = res is TdApi.Ok
-                        val ms = (System.currentTimeMillis() - started).toInt()
-                        status[cand.key] = Triple(ok, if (ok) ms else -1, System.currentTimeMillis())
-                        if (ok) good += cand
-                        if (pending == 0) {
-                            mergeIntoPool(context, good)
-                            refreshEntries(context)
-                            Log.i(TAG, "channel refresh: ${good.size} working proxies saved")
-                        }
+                val toTest = parsed.take(MAX_POOL)
+                scope.launch {
+                    val good = mutableListOf<Candidate>()
+                    for (batch in toTest.chunked(TEST_BATCH)) {
+                        batch.map { cand ->
+                            async {
+                                val (ok, ms) = pingOne(cand)
+                                status[cand.key] = Triple(ok, if (ok) ms else -1, System.currentTimeMillis())
+                                if (ok) synchronized(good) { good += cand }
+                            }
+                        }.awaitAll()
                     }
+                    mergeIntoPool(context, good)
+                    refreshEntries(context)
+                    Log.i(TAG, "channel refresh: ${good.size} working proxies saved")
                 }
             }
         }

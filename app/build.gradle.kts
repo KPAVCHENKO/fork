@@ -24,8 +24,8 @@ android {
         applicationId = "app.fork.messenger"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "0.19.0"
+        versionCode = 22
+        versionName = "0.20.0"
 
         // Только ABI, для которых собрана TDLib (см. tdlib/src/main/jniLibs)
         ndk {

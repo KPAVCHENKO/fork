@@ -48,7 +48,12 @@ object NetworkMonitor {
         val vpnToggled = vpn != lastVpn
         lastVpn = vpn
         push(if (vpnToggled) "$reason/vpn=$vpn" else reason)
-        TdClient.onNetworkChanged()
+        if (vpnToggled) {
+            // VPN on -> go direct (no proxy); VPN off -> re-enable proxy.
+            TdClient.onVpnChanged(vpn)
+        } else {
+            TdClient.onNetworkChanged()
+        }
     }
 
     /** True if the active network runs over a VPN. */
