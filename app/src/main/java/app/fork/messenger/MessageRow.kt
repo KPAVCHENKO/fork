@@ -129,6 +129,7 @@ fun MessageRow(
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { menuOpen = true },
+                    onDoubleClick = { MessageStore.toggleReaction(message.id, "❤️") },
                 ),
         ) {
             MessageBubble(message, onOpenMedia, onOpenStickerSet, animateStickers)

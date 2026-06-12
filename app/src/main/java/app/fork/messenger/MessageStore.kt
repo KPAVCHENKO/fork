@@ -138,6 +138,10 @@ object MessageStore {
     private val _detached = MutableStateFlow(false)
     val detached: StateFlow<Boolean> = _detached.asStateFlow()
 
+    /** id первого непрочитанного сообщения (для разделителя «Непрочитанные»). */
+    private val _firstUnread = MutableStateFlow(0L)
+    val firstUnread: StateFlow<Long> = _firstUnread.asStateFlow()
+
     private var historyEnded = false
 
     fun open(id: Long) {
@@ -182,6 +186,7 @@ object MessageStore {
         refreshPinned(id)
 
         // Open at the FIRST UNREAD message (like Telegram), not at the very bottom.
+        _firstUnread.value = 0L
         val unread = chat?.unreadCount ?: 0
         val lastReadInbox = chat?.lastReadInboxMessageId ?: 0L
         if (unread > 0 && lastReadInbox != 0L) {
@@ -211,6 +216,7 @@ object MessageStore {
             }
             rebuild()
             val firstUnread = synchronized(lock) { msgs.firstOrNull { it.id > lastReadInbox }?.id }
+            _firstUnread.value = firstUnread ?: 0L
             _scrollTo.value = firstUnread ?: synchronized(lock) { msgs.lastOrNull()?.id }
         }
     }

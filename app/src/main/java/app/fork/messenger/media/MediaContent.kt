@@ -427,11 +427,16 @@ fun DocumentContent(document: TdApi.Document, mine: Boolean = false) {
 }
 
 @Composable
-fun StickerContent(sticker: TdApi.Sticker, play: Boolean = true, onClick: (() -> Unit)? = null) {
+fun StickerContent(
+    sticker: TdApi.Sticker,
+    play: Boolean = true,
+    size: androidx.compose.ui.unit.Dp = 140.dp,
+    onClick: (() -> Unit)? = null,
+) {
     StickerView(
         sticker,
         modifier = Modifier
-            .size(140.dp)
+            .size(size)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         play = play,
     )

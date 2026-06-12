@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -175,6 +176,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     }
     val searchHits by MessageStore.searchHits.collectAsStateWithLifecycle()
     val detached by MessageStore.detached.collectAsStateWithLifecycle()
+    val firstUnreadId by MessageStore.firstUnread.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val reversed = messages.asReversed()
@@ -426,6 +428,10 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                             if (older == null || older.dateLabel != message.dateLabel) {
                                 DateCapsule(message.dateLabel)
                             }
+                            // Разделитель «Непрочитанные сообщения» перед первым непрочитанным.
+                            if (message.id == firstUnreadId && firstUnreadId != 0L) {
+                                UnreadDivider()
+                            }
                             MessageRow(
                                 message,
                                 onOpenMedia = { mediaTarget = it },
@@ -473,23 +479,33 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                         .align(Alignment.BottomEnd)
                         .padding(16.dp),
                 ) {
-                    GlassPill(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clickable {
-                                if (detached) {
-                                    MessageStore.returnToLatest()
-                                } else {
-                                    scope.launch { listState.animateScrollToItem(0) }
-                                }
-                            },
-                    ) {
-                        Icon(
-                            ForkIcons.Down,
-                            contentDescription = "вниз",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(22.dp),
-                        )
+                    Box(contentAlignment = Alignment.TopCenter) {
+                        GlassPill(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clickable {
+                                    if (detached) {
+                                        MessageStore.returnToLatest()
+                                    } else {
+                                        scope.launch { listState.animateScrollToItem(0) }
+                                    }
+                                },
+                        ) {
+                            Icon(
+                                ForkIcons.Down,
+                                contentDescription = "вниз",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                        // Бейдж непрочитанных над кнопкой «вниз» (как в Telegram).
+                        val chatRev by ChatStore.revision.collectAsStateWithLifecycle()
+                        val unread = remember(chatRev, chatId) { ChatStore.chat(chatId)?.unreadCount ?: 0 }
+                        if (unread > 0) {
+                            Box(Modifier.offset(y = (-8).dp)) {
+                                app.fork.messenger.ui.UnreadBadge(unread, muted = false)
+                            }
+                        }
                     }
                 }
                 }
@@ -696,6 +712,26 @@ private fun PinnedMessageBar(text: String, onClick: () -> Unit) {
     }
 }
 
+/** Разделитель «Непрочитанные сообщения» (как в Telegram). */
+@Composable
+private fun UnreadDivider() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(forkTokens.glassPill),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "Непрочитанные сообщения",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+            modifier = Modifier.padding(vertical = 5.dp),
+        )
+    }
+}
+
 /** Дата-разделитель — стеклянная капсула по центру (Fork Design Spec §7.6). */
 @Composable
 private fun DateCapsule(label: String) {
@@ -765,6 +801,21 @@ fun MessageBubble(
             horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start,
         ) {
             app.fork.messenger.media.VideoNoteContent(content.videoNote)
+        }
+        return
+    }
+    // Одиночное эмодзи — показываем как анимированный стикер (как в Telegram).
+    if (content is TdApi.MessageAnimatedEmoji) {
+        val st = content.animatedEmoji.sticker
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start,
+        ) {
+            if (st != null) {
+                app.fork.messenger.media.StickerContent(st, play = animateStickers, size = 96.dp)
+            } else {
+                Text(content.emoji, style = MaterialTheme.typography.displaySmall)
+            }
         }
         return
     }

@@ -137,7 +137,7 @@ private fun TgsView(path: String, play: Boolean) {
     if (RLottie.available) {
         // Native rlottie — the same engine Telegram uses; renders frames off the UI
         // thread for smooth playback on weak devices.
-        RLottieView(rawJson = data, modifier = Modifier.fillMaxSize(), play = play)
+        RLottieView(rawJson = data, cacheKey = path, modifier = Modifier.fillMaxSize(), play = play)
     } else {
         // Fallback to lottie-compose if the native lib failed to load.
         val composition by rememberLottieComposition(LottieCompositionSpec.JsonString(data))
