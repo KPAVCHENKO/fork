@@ -3,12 +3,8 @@ package app.fork.messenger.media
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import coil.compose.AsyncImage
@@ -17,7 +13,6 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.rememberLottieComposition
 import java.io.File
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.drinkless.tdlib.TdApi
@@ -37,11 +32,6 @@ import org.drinkless.tdlib.TdApi
  *  - Gunzipped TGS JSON is cached by file path to avoid re-reading/inflating on
  *    every scroll-back.
  */
-
-// Cap simultaneous WEBM engines (each runs two VP9 MediaCodec instances). A chat
-// screen rarely shows more than ~6 video stickers at once.
-private const val MAX_CONCURRENT_ANIMATIONS = 6
-private val activeAnimations = AtomicInteger(0)
 
 /** path -> inflated Lottie JSON, so scrolling back doesn't re-inflate. */
 private val tgsJsonCache = android.util.LruCache<String, String>(24)
@@ -75,24 +65,6 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
     val state = rememberFileState(sticker.sticker, autoDownload = true, priority = 24)
     val path = state.path
 
-    // Concurrency slot only for WEBM (two MediaCodec instances each). rlottie is
-    // bounded by its own render pool, so TGS doesn't need a slot.
-    var hasSlot by remember { mutableStateOf(false) }
-    DisposableEffect(isWebm, path) {
-        if (isWebm && path != null && !hasSlot &&
-            activeAnimations.get() < MAX_CONCURRENT_ANIMATIONS
-        ) {
-            activeAnimations.incrementAndGet()
-            hasSlot = true
-        }
-        onDispose {
-            if (hasSlot) {
-                activeAnimations.decrementAndGet()
-                hasSlot = false
-            }
-        }
-    }
-
     Box(modifier, contentAlignment = Alignment.Center) {
         val staticPath = thumbPath ?: path.takeIf { sticker.format is TdApi.StickerFormatWebp }
         if (staticPath != null) {
@@ -106,9 +78,10 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
         when {
             // TGS animates ALWAYS via rlottie (cheap, draw-phase only).
             isTgs && path != null -> TgsView(path, play = true)
-            // WEBM animates ALWAYS via the VP9-with-alpha engine (draw-phase only,
-            // real transparency — no more black squares), bounded by the slot cap.
-            isWebm && path != null && hasSlot ->
+            // WEBM animates ALWAYS via the VP9-with-alpha engine (draw-phase only, real
+            // transparency). One decoder per UNIQUE sticker is shared across all its
+            // on-screen copies (WebmEnginePool) — copies stay in phase, fewer decoders.
+            isWebm && path != null ->
                 WebmAlphaView(path, modifier = Modifier.fillMaxSize())
             // static WEBP is already shown as the base image above.
         }

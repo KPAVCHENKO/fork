@@ -1376,6 +1376,7 @@ private fun AlbumCell(item: AlbumItem, onOpenMedia: (MediaTarget) -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 priority = 22,
                 shape = square,
+                bounded = false,
             ) { onOpenMedia(MediaTarget.Photo(c.photo)) }
         }
         is TdApi.MessageVideo -> {
@@ -1389,6 +1390,7 @@ private fun AlbumCell(item: AlbumItem, onOpenMedia: (MediaTarget) -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         priority = 20,
                         shape = square,
+                        bounded = false,
                     ) { onOpenMedia(MediaTarget.Video(c.video)) }
                 }
                 Box(
@@ -1645,22 +1647,33 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
 
     // Выбор фото/видео из галереи: сначала показываем предпросмотр с подписью.
     var pendingMedia by remember { mutableStateOf<PendingMedia?>(null) }
+    var pendingAlbum by remember { mutableStateOf<List<PendingMedia>?>(null) }
+    val mediaScope = rememberCoroutineScope()
+    // До 10 фото/видео разом (как в TG): 1 — обычное сообщение, несколько — альбом.
     val pickMedia = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri ->
-        if (uri != null) {
-            pendingMedia = if (MediaSend.isVideo(context, uri)) {
-                MediaSend.copyToCache(context, uri, "mp4")?.let { file ->
-                    val info = MediaSend.videoInfo(file.absolutePath)
-                    PendingMedia(file.absolutePath, true, info.width, info.height, info.durationSeconds)
-                }
-            } else {
-                MediaSend.copyToCache(context, uri, "jpg")?.let { file ->
-                    val (w, h) = MediaSend.imageSize(file.absolutePath)
-                    PendingMedia(file.absolutePath, false, w, h, 0)
-                }
+        ActivityResultContracts.PickMultipleVisualMedia(10),
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        mediaScope.launch {
+            val items = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                uris.mapNotNull { uri -> buildPendingMedia(context, uri) }
+            }
+            when {
+                items.size == 1 -> pendingMedia = items[0]
+                items.size > 1 -> pendingAlbum = items
             }
         }
+    }
+
+    pendingAlbum?.let { album ->
+        AlbumPreviewDialog(
+            items = album,
+            onCancel = { pendingAlbum = null },
+            onSend = { caption ->
+                MessageStore.sendAlbum(album, caption)
+                pendingAlbum = null
+            },
+        )
     }
 
     pendingMedia?.let { media ->
@@ -1979,6 +1992,71 @@ private fun SendMicButton(
 
 /** Выбранное из галереи медиа, ждёт подтверждения отправки. */
 data class PendingMedia(val path: String, val isVideo: Boolean, val width: Int, val height: Int, val duration: Int)
+
+/** Копирует выбранный URI в кэш и измеряет размеры (для одиночной отправки и альбома). */
+private fun buildPendingMedia(context: android.content.Context, uri: android.net.Uri): PendingMedia? =
+    if (MediaSend.isVideo(context, uri)) {
+        MediaSend.copyToCache(context, uri, "mp4")?.let { file ->
+            val info = MediaSend.videoInfo(file.absolutePath)
+            PendingMedia(file.absolutePath, true, info.width, info.height, info.durationSeconds)
+        }
+    } else {
+        MediaSend.copyToCache(context, uri, "jpg")?.let { file ->
+            val (w, h) = MediaSend.imageSize(file.absolutePath)
+            PendingMedia(file.absolutePath, false, w, h, 0)
+        }
+    }
+
+/** Предпросмотр альбома (несколько фото/видео): сетка превью + подпись + Отправить. */
+@Composable
+private fun AlbumPreviewDialog(
+    items: List<PendingMedia>,
+    onCancel: () -> Unit,
+    onSend: (String) -> Unit,
+) {
+    var caption by rememberSaveable { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Отправить ${items.size}") },
+        text = {
+            Column {
+                items.chunked(3).forEach { row ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        row.forEach { m ->
+                            coil.compose.AsyncImage(
+                                model = java.io.File(m.path),
+                                contentDescription = null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(8.dp)),
+                            )
+                        }
+                        repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = caption,
+                    onValueChange = { caption = it },
+                    placeholder = { Text("Подпись…") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3,
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = { onSend(caption) }) { Text("Отправить") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onCancel) { Text("Отмена") }
+        },
+    )
+}
 
 /** Полноэкранный предпросмотр перед отправкой: медиа + подпись + Отправить. */
 @Composable

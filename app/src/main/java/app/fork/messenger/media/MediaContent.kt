@@ -63,6 +63,21 @@ fun TdApi.Photo.fullSize(): TdApi.PhotoSize? =
 private fun aspect(width: Int, height: Int): Float =
     if (width <= 0 || height <= 0) 1f else (width.toFloat() / height).coerceIn(0.45f, 2.2f)
 
+// Одиночные фото/видео в пузыре вписываются в ОДИН размер-коробку (как в TG): ширина
+// стандартная, высота по пропорции, но не выше предела. Так горизонтальные не оказываются
+// «маленькими», а вертикальные — «гигантскими» — все смотрятся ровно и продуманно.
+private val MAX_MEDIA_W = 264.dp
+private val MAX_MEDIA_H = 360.dp
+
+private fun displayBox(width: Int, height: Int): Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp> {
+    if (width <= 0 || height <= 0) return MAX_MEDIA_W to MAX_MEDIA_W
+    val ar = width.toFloat() / height
+    var w = MAX_MEDIA_W
+    var h = MAX_MEDIA_W / ar
+    if (h > MAX_MEDIA_H) { h = MAX_MEDIA_H; w = MAX_MEDIA_H * ar }
+    return w to h
+}
+
 /** Картинка медиа: показывает мини-превью сразу, поверх — полный файл по мере загрузки. */
 @Composable
 fun MediaImage(
@@ -73,15 +88,24 @@ fun MediaImage(
     modifier: Modifier = Modifier,
     priority: Int = 24,
     shape: androidx.compose.ui.graphics.Shape? = null,
+    bounded: Boolean = true,
     onClick: (() -> Unit)? = null,
 ) {
     val state = rememberFileState(file, autoDownload = true, priority = priority)
     val miniBitmap = rememberMiniThumb(mini)
 
+    // bounded — одиночные медиа: фиксированная коробка (ровно, как в TG).
+    // !bounded — ячейка альбома: заполняет ширину родителя, высота по пропорции.
+    val sizeMod = if (bounded) {
+        val (dw, dh) = displayBox(width, height)
+        Modifier.width(dw).height(dh)
+    } else {
+        Modifier.widthIn(max = 252.dp).aspectRatio(aspect(width, height))
+    }
+
     Box(
         modifier
-            .widthIn(max = 252.dp)
-            .aspectRatio(aspect(width, height))
+            .then(sizeMod)
             // Радиус медиа = радиус пузыря − 3dp; для «голых» медиа — форма пузыря.
             .clip(shape ?: RoundedCornerShape(forkTokens.bubbleRadius - 3.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)

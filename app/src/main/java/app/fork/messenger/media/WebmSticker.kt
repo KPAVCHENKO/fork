@@ -9,10 +9,8 @@ import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -298,24 +296,67 @@ internal object WebmDemuxer {
 // ---------------------------------------------------------------------------
 
 /**
- * Видео-стикер с прозрачностью. Рисуется как rlottie: фоновые потоки декодируют,
- * Canvas читает кадр только в draw-фазе. При любой ошибке остаётся базовая миниатюра.
+ * Видео-стикер с прозрачностью. Рисуется как rlottie: фоновый поток декодирует, Canvas
+ * читает кадр только в draw-фазе. ОДИН движок на уникальный путь стикера ([WebmEnginePool]):
+ * все копии одного стикера на экране делят один декодер и один кадр → идут В ФАЗЕ
+ * (раньше каждая копия декодировала сама и расходилась), и аппаратных VP9-сессий меньше
+ * (меньше нагрев). При любой ошибке остаётся базовая миниатюра.
  */
 @Composable
 fun WebmAlphaView(path: String, modifier: Modifier = Modifier) {
-    var frame by remember(path) { mutableStateOf<ImageBitmap?>(null) }
-
+    val frame = remember(path) { WebmEnginePool.acquire(path) }
     DisposableEffect(path) {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        scope.launch {
-            runCatching { runEngine(path) { img -> frame = img } }
-                .onFailure { if (it !is kotlinx.coroutines.CancellationException) Log.e(TAG, "engine failed: $it") }
-        }
-        onDispose { scope.cancel() }
+        onDispose { WebmEnginePool.release(path) }
+    }
+    Canvas(modifier) {
+        frame.value?.let { drawFitted(it) }
+    }
+}
+
+/**
+ * Пул движков: один декодирующий цикл на уникальный путь стикера, общий для всех его
+ * экземпляров на экране (ref-counting). Кадр публикуется в snapshot-state, который все
+ * Canvas'ы читают в draw-фазе. Когда исчезает последний экземпляр — движок гасится.
+ */
+private object WebmEnginePool {
+    // Максимум одновременных движков = уникальных пар аппаратных VP9-сессий (цвет+альфа).
+    // Декодеры дедуплицированы по пути, так что это считает РАЗНЫЕ стикеры на экране, а не
+    // их копии. Сверх лимита стикер показывает статичную миниатюру, пока не освободится слот.
+    private const val MAX_ENGINES = 8
+
+    private class Engine {
+        val frame = mutableStateOf<ImageBitmap?>(null)
+        var refs = 0
+        var job: kotlinx.coroutines.Job? = null
     }
 
-    Canvas(modifier) {
-        frame?.let { drawFitted(it) }
+    private val engines = HashMap<String, Engine>()
+    private val empty = mutableStateOf<ImageBitmap?>(null) // общий «нет кадра» для отказов
+    private val lock = Any()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    fun acquire(path: String): androidx.compose.runtime.State<ImageBitmap?> = synchronized(lock) {
+        engines[path]?.let { it.refs++; return@synchronized it.frame }
+        if (engines.size >= MAX_ENGINES) return@synchronized empty // нет свободного декодера
+        val eng = Engine()
+        eng.refs = 1
+        eng.job = scope.launch {
+            runCatching { runEngine(path) { img -> eng.frame.value = img } }
+                .onFailure {
+                    if (it !is kotlinx.coroutines.CancellationException) Log.e(TAG, "engine failed: $it")
+                }
+        }
+        engines[path] = eng
+        eng.frame
+    }
+
+    fun release(path: String) = synchronized(lock) {
+        val e = engines[path] ?: return@synchronized // путь без движка (был отказ) — ничего
+        e.refs--
+        if (e.refs <= 0) {
+            e.job?.cancel()
+            engines.remove(path)
+        }
     }
 }
 
@@ -335,7 +376,6 @@ private suspend fun runEngine(path: String, onFrame: (ImageBitmap) -> Unit) {
     val webm = WebmDemuxer.parse(File(path).readBytes()) ?: return
     val frames = webm.frames
     val n = frames.size
-    Log.e(TAG, "start ${webm.width}x${webm.height} n=$n alpha=${webm.hasAlpha} ${webm.mime}")
 
     // Рендерим с даунсемплированием 512→256 (как rlottie): мельче глазу не нужно,
     // а merge-цикл в 4 раза дешевле.

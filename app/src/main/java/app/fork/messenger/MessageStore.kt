@@ -592,6 +592,31 @@ object MessageStore {
         )
     }
 
+    /** Альбом из нескольких фото/видео (до 10, как в TG). Подпись — на первом элементе. */
+    fun sendAlbum(items: List<PendingMedia>, caption: String = "") {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L || items.isEmpty()) return
+        val replyTo = _reply.value?.let {
+            TdApi.InputMessageReplyToMessage(it.messageId, null, 0, null)
+        }
+        val contents = items.mapIndexed { i, m ->
+            val cap = if (i == 0 && caption.isNotBlank()) TdApi.FormattedText(caption, null) else null
+            if (m.isVideo) {
+                TdApi.InputMessageVideo(
+                    TdApi.InputFileLocal(m.path), null, null, 0, IntArray(0),
+                    m.duration, m.width, m.height, true, cap, false, null, false,
+                )
+            } else {
+                TdApi.InputMessagePhoto(
+                    TdApi.InputFileLocal(m.path), null, null, IntArray(0),
+                    m.width, m.height, cap, false, null, false,
+                )
+            }
+        }.toTypedArray<TdApi.InputMessageContent>()
+        TdClient.send(TdApi.SendMessageAlbum(id, null, replyTo, null, contents))
+        _reply.value = null
+    }
+
     fun sendSticker(sticker: TdApi.Sticker) {
         val remoteId = sticker.sticker.remote?.id
         if (remoteId.isNullOrBlank()) return

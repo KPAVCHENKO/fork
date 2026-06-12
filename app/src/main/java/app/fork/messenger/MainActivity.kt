@@ -9,21 +9,28 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -207,6 +214,8 @@ private fun HomeShell(
     }
 }
 
+/** Плавающая «стеклянная» нижняя навигация (как в TG): скруглённая, полупрозрачная,
+ *  компактная — занимает мало места и парит над фоном. */
 @Composable
 private fun ForkBottomBar(current: Int, onSelect: (Int) -> Unit) {
     val items = listOf(
@@ -215,19 +224,41 @@ private fun ForkBottomBar(current: Int, onSelect: (Int) -> Unit) {
         Triple(2, app.fork.messenger.ui.ForkIcons.Settings, "Настройки"),
         Triple(3, app.fork.messenger.ui.ForkIcons.Person, "Профиль"),
     )
-    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-        items.forEach { (i, icon, label) ->
-            NavigationBarItem(
-                selected = current == i,
-                onClick = { onSelect(i) },
-                icon = { Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp)) },
-                label = { Text(label) },
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
-                ),
-            )
+    val shape = RoundedCornerShape(28.dp)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 22.dp, vertical = 8.dp),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(58.dp)
+                .clip(shape)
+                // Полупрозрачное «стекло» + тонкая светлая окантовка.
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.80f))
+                .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items.forEach { (i, icon, label) ->
+                val selected = current == i
+                val tint = if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(shape)
+                        .clickable { onSelect(i) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.height(3.dp))
+                    Text(label, color = tint, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+                }
+            }
         }
     }
 }
