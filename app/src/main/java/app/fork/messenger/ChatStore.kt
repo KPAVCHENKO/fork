@@ -140,6 +140,25 @@ object ChatStore {
         TdClient.send(TdApi.SetChatNotificationSettings(chatId, settings))
     }
 
+    /** Отметить чат прочитанным: просматриваем последнее сообщение с forceRead. */
+    fun markRead(chatId: Long) {
+        val chat = chat(chatId) ?: return
+        chat.lastMessage?.let { last ->
+            TdClient.send(
+                TdApi.ViewMessages(chatId, longArrayOf(last.id), TdApi.MessageSourceChatList(), true),
+            )
+        }
+        // Снимаем и ручную пометку «непрочитан», если стояла.
+        if (chat.isMarkedAsUnread) {
+            TdClient.send(TdApi.ToggleChatIsMarkedAsUnread(chatId, false))
+        }
+    }
+
+    /** Пометить чат непрочитанным (ручная точка, как в TG). */
+    fun markUnread(chatId: Long) {
+        TdClient.send(TdApi.ToggleChatIsMarkedAsUnread(chatId, true))
+    }
+
     fun deleteOrLeave(chatId: Long) {
         val chat = chat(chatId) ?: return
         when (chat.type) {

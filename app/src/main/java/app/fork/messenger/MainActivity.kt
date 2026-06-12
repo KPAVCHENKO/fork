@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -266,6 +268,9 @@ private fun ForkBottomBar(
                 .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f), shape),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Суммарные непрочитанные для бейджа на «Чатах» (без чатов «без звука»).
+            val chats by app.fork.messenger.ChatStore.chatList.collectAsStateWithLifecycle()
+            val totalUnread = remember(chats) { chats.filter { !it.isMuted }.sumOf { it.unread } }
             items.forEach { (i, icon, label) ->
                 val selected = current == i
                 val tint = if (selected) MaterialTheme.colorScheme.primary
@@ -279,7 +284,29 @@ private fun ForkBottomBar(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(21.dp))
+                    Box {
+                        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(21.dp))
+                        if (i == 0 && totalUnread > 0) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 10.dp, y = (-4).dp)
+                                    .height(14.dp)
+                                    .widthIn(min = 14.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .background(MaterialTheme.colorScheme.primary)
+                                    .padding(horizontal = 4.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    if (totalUnread > 99) "99+" else "$totalUnread",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(2.dp))
                     Text(label, color = tint, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
                 }

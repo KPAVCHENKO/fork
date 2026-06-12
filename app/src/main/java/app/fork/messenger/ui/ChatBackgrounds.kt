@@ -25,6 +25,7 @@ import kotlin.random.Random
  * векторный узор. Рисуются одним Canvas без bitmap-ассетов; узор статичен.
  */
 enum class ChatWallpaper(val id: String, val title: String) {
+    CLASSIC("classic", "Телеграм"),
     GLOW("glow", "Сияние"),
     DOODLE("doodle", "Дудлы"),
     WAVES("waves", "Волны"),
@@ -33,7 +34,7 @@ enum class ChatWallpaper(val id: String, val title: String) {
     SUNSET("sunset", "Закат");
 
     companion object {
-        fun byId(id: String): ChatWallpaper = entries.firstOrNull { it.id == id } ?: GLOW
+        fun byId(id: String): ChatWallpaper = entries.firstOrNull { it.id == id } ?: CLASSIC
     }
 }
 
@@ -78,6 +79,7 @@ private fun DrawScope.drawWallpaper(wallpaper: ChatWallpaper, dark: Boolean, amo
     // AMOLED: база уводится к чёрному, узор приглушается ×0.8 (по спеке).
     val patternScale = if (amoled && dark) 0.8f else 1f
     when (wallpaper) {
+        ChatWallpaper.CLASSIC -> drawClassic(dark, amoled, patternScale)
         ChatWallpaper.GLOW -> drawGlow(dark, amoled, patternScale)
         ChatWallpaper.DOODLE -> drawDoodle(dark, amoled, patternScale)
         ChatWallpaper.WAVES -> drawWaves(dark, amoled, patternScale)
@@ -91,7 +93,9 @@ private fun DrawScope.base(dark: Boolean, amoled: Boolean, top: Color, bottom: C
     val colors = when {
         amoled && dark -> listOf(top.darkenToAmoled(), bottom.darkenToAmoled())
         dark -> listOf(top, bottom)
-        else -> listOf(Color(0xFFEEF3FB), Color(0xFFE3EAF7))
+        // Светлая тема: светлые варианты СОБСТВЕННЫХ цветов обоев (а не один и тот же
+        // почти белый фон) — иначе все обои выглядели одинаково и «не ставились».
+        else -> listOf(top.lightenForDay(), bottom.lightenForDay())
     }
     drawRect(
         Brush.linearGradient(
@@ -105,15 +109,82 @@ private fun DrawScope.base(dark: Boolean, amoled: Boolean, top: Color, bottom: C
 private fun Color.darkenToAmoled(): Color =
     Color(red = red * 0.35f, green = green * 0.35f, blue = blue * 0.35f)
 
-/** Цвет узора: на тёмной базе — белый, на светлой — чёрный 8–10%. */
+/** Светлый дневной вариант цвета: сильно разбавляем белым, сохраняя оттенок. */
+private fun Color.lightenForDay(): Color = Color(
+    red = red + (1f - red) * 0.78f,
+    green = green + (1f - green) * 0.78f,
+    blue = blue + (1f - blue) * 0.78f,
+)
+
+/** Цвет узора: на тёмной базе — белый, на светлой — чёрный до 16% (видимый). */
 private fun patternColor(dark: Boolean, alpha: Float): Color =
-    if (dark) Color.White.copy(alpha = alpha) else Color.Black.copy(alpha = (alpha * 0.7f).coerceAtMost(0.10f))
+    if (dark) Color.White.copy(alpha = alpha) else Color.Black.copy(alpha = alpha.coerceAtMost(0.16f))
+
+// ---------- 0. Телеграм (классика) ----------
+
+// Точные цвета дефолтных обоев Telegram (freeform-градиент темы Blue/day):
+// dbddbb / 6ba587 / d5d88d / 88b884 — тот самый зелёно-оливковый фон.
+private val TgC1 = Color(0xFFDBDDBB)
+private val TgC2 = Color(0xFF6BA587)
+private val TgC3 = Color(0xFFD5D88D)
+private val TgC4 = Color(0xFF88B884)
+
+private fun DrawScope.drawClassic(dark: Boolean, amoled: Boolean, k: Float) {
+    // Ночной вариант — те же цвета, сильно затемнённые (как night-обои TG).
+    fun c(c: Color): Color = when {
+        amoled && dark -> Color(c.red * 0.18f, c.green * 0.18f, c.blue * 0.18f)
+        dark -> Color(c.red * 0.30f, c.green * 0.32f, c.blue * 0.30f)
+        else -> c
+    }
+    // Freeform-градиент аппроксимируем: диагональная база + два радиальных пятна.
+    drawRect(
+        Brush.linearGradient(
+            colors = listOf(c(TgC1), c(TgC3)),
+            start = Offset(0f, 0f),
+            end = Offset(size.width, size.height),
+        ),
+    )
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(c(TgC2).copy(alpha = 0.85f), Color.Transparent),
+            center = Offset(size.width * 0.85f, size.height * 0.12f),
+            radius = size.width * 0.95f,
+        ),
+        radius = size.width * 0.95f,
+        center = Offset(size.width * 0.85f, size.height * 0.12f),
+    )
+    drawCircle(
+        brush = Brush.radialGradient(
+            colors = listOf(c(TgC4).copy(alpha = 0.80f), Color.Transparent),
+            center = Offset(size.width * 0.10f, size.height * 0.88f),
+            radius = size.width * 1.0f,
+        ),
+        radius = size.width * 1.0f,
+        center = Offset(size.width * 0.10f, size.height * 0.88f),
+    )
+    // Узор-дудлы поверх — тёмный на светлой базе, светлый на тёмной (как паттерн TG).
+    val tile = 170.dp.toPx()
+    val stroke = Stroke(width = 1.6.dp.toPx())
+    val color = if (dark) Color.White.copy(alpha = 0.06f * k)
+    else Color(0xFF33421F).copy(alpha = 0.10f * k)
+    var row = 0
+    var y = -tile / 2
+    while (y < size.height + tile) {
+        var x = if (row % 2 == 0) -tile / 2 else 0f
+        while (x < size.width + tile) {
+            drawDoodleTile(Offset(x, y), tile, color, stroke)
+            x += tile
+        }
+        y += tile
+        row++
+    }
+}
 
 // ---------- 1. Сияние ----------
 
 private fun DrawScope.drawGlow(dark: Boolean, amoled: Boolean, k: Float) {
     base(dark, amoled, Color(0xFF0F1729), Color(0xFF0A0F1E))
-    val lightK = if (dark) 1f else 0.55f
+    val lightK = if (dark) 1f else 0.8f
     fun glow(center: Offset, radius: Float, color: Color, alpha: Float) {
         drawCircle(
             brush = Brush.radialGradient(
@@ -215,7 +286,7 @@ private fun DrawScope.drawWaves(dark: Boolean, amoled: Boolean, k: Float) {
         }
         drawPath(
             path,
-            colors[i].copy(alpha = alphas[i] * k * (if (dark) 1f else 0.5f)),
+            colors[i].copy(alpha = alphas[i] * k * (if (dark) 1f else 0.75f)),
             style = Stroke(width = (1.6f + i * 0.2f).dp.toPx()),
         )
     }
@@ -233,7 +304,7 @@ private fun DrawScope.drawWaves(dark: Boolean, amoled: Boolean, k: Float) {
             lineTo(size.width + 20f, size.height + 20f)
             close()
         }
-        drawPath(blob, c.copy(alpha = (0.12f - i * 0.02f) * k * (if (dark) 1f else 0.5f)))
+        drawPath(blob, c.copy(alpha = (0.12f - i * 0.02f) * k * (if (dark) 1f else 0.75f)))
     }
 }
 
@@ -243,7 +314,7 @@ private fun DrawScope.drawRings(dark: Boolean, amoled: Boolean, k: Float) {
     base(dark, amoled, Color(0xFF0D1424), Color(0xFF0B101E))
     val tile = 260.dp.toPx()
     val stroke = Stroke(width = 1.4.dp.toPx())
-    val lightK = if (dark) 1f else 0.5f
+    val lightK = if (dark) 1f else 0.8f
     var row = 0
     var y = 0f
     while (y < size.height + tile) {
@@ -270,7 +341,7 @@ private fun DrawScope.drawNorth(dark: Boolean, amoled: Boolean, k: Float) {
         else if (dark) listOf(Color(0xFF070D1C).darkenToAmoled(), Color(0xFF0B1530).darkenToAmoled(), Color(0xFF0D1830).darkenToAmoled())
         else listOf(Color(0xFFEEF3FB), Color(0xFFE3EAF7))
     drawRect(Brush.verticalGradient(stops))
-    val lightK = if (dark) 1f else 0.5f
+    val lightK = if (dark) 1f else 0.8f
 
     // Две ленты северного сияния (повёрнутые градиентные полосы)
     for ((i, c) in listOf(Cyan, Violet).withIndex()) {
@@ -308,7 +379,7 @@ private fun DrawScope.drawSunset(dark: Boolean, amoled: Boolean, k: Float) {
         else if (dark) listOf(Color(0xFF131026).darkenToAmoled(), Color(0xFF1B1430).darkenToAmoled(), Color(0xFF241738).darkenToAmoled())
         else listOf(Color(0xFFFDF2EC), Color(0xFFF3E5EF))
     drawRect(Brush.verticalGradient(stops))
-    val lightK = if (dark) 1f else 0.6f
+    val lightK = if (dark) 1f else 0.85f
 
     // Тёплое свечение у горизонта (45% высоты)
     val horizonY = size.height * 0.45f

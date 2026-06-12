@@ -55,7 +55,7 @@ object SettingsStore {
     // ---------- Обои чата (Fork Design Spec §3.8) ----------
 
     /** Обои по умолчанию для всех чатов. */
-    private val _defaultWallpaper = MutableStateFlow("glow")
+    private val _defaultWallpaper = MutableStateFlow("classic")
     val defaultWallpaper: StateFlow<String> = _defaultWallpaper.asStateFlow()
 
     /** Затемнение узора 0..0.6. */
@@ -106,7 +106,7 @@ object SettingsStore {
         _quickReaction.value = prefs.getString("quick_reaction", "❤️") ?: "❤️"
         _recentEmoji.value = prefs.getString("recent_emoji", "")
             ?.split("")?.filter { it.isNotBlank() } ?: emptyList()
-        _defaultWallpaper.value = prefs.getString("wallpaper_default", "glow") ?: "glow"
+        _defaultWallpaper.value = prefs.getString("wallpaper_default", "classic") ?: "classic"
         _wallpaperDim.value = prefs.getFloat("wallpaper_dim", 0f)
     }
 

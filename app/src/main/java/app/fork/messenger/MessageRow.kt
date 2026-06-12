@@ -64,6 +64,7 @@ fun MessageRow(
     // null — скрыто; true — удалить у всех; false — у себя.
     var deleteConfirm by remember { mutableStateOf<Boolean?>(null) }
     val clipboard = LocalClipboardManager.current
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Режим выбора: тап и долгое нажатие переключают отметку, меню не открывается.
     if (selectionMode) {
@@ -223,6 +224,23 @@ fun MessageRow(
                         onClick = {
                             clipboard.setText(AnnotatedString(message.text))
                             menuOpen = false
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Поделиться") },
+                        onClick = {
+                            menuOpen = false
+                            runCatching {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(android.content.Intent.EXTRA_TEXT, message.text)
+                                }
+                                context.startActivity(
+                                    android.content.Intent.createChooser(intent, "Поделиться").apply {
+                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    },
+                                )
+                            }
                         },
                     )
                     DropdownMenuItem(

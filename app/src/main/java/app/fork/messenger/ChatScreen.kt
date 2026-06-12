@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -526,6 +527,27 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                     }
                 }
 
+                // Свайп-назад от левого края — ТОЛЬКО над лентой сообщений: не перекрывает
+                // ни кнопку «назад» в шапке, ни скрепку в поле ввода (они вне этого Box).
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .width(48.dp)
+                        .align(Alignment.CenterStart)
+                        .pointerInput(Unit) {
+                            var total = 0f
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    if (total > 44.dp.toPx()) onBack()
+                                    total = 0f
+                                },
+                            ) { change, drag ->
+                                change.consume()
+                                total += drag
+                            }
+                        },
+                )
+
                 // Кнопка «вниз» — стеклянная капсула 46dp (Fork Design Spec §4.3).
                 val showScrollDown by remember {
                     derivedStateOf { listState.firstVisibleItemIndex > 3 }
@@ -570,28 +592,6 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                 }
             }
         }
-
-        // Свайп-назад от левого края экрана (шире, как в Telegram). Начинается НИЖЕ шапки
-        // (padding top), чтобы не перекрывать кнопку «назад» в левом верхнем углу.
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .width(48.dp)
-                .align(Alignment.CenterStart)
-                .padding(top = 104.dp)
-                .pointerInput(Unit) {
-                    var total = 0f
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (total > 44.dp.toPx()) onBack()
-                            total = 0f
-                        },
-                    ) { change, drag ->
-                        change.consume()
-                        total += drag
-                    }
-                },
-        )
 
         mediaTarget?.let { target ->
             // Листаемый просмотрщик: собираем все медиа чата и открываем на нажатом.
@@ -1555,7 +1555,77 @@ private fun BubbleMedia(
         is TdApi.MessageVoiceNote -> VoiceContent(content.voiceNote, mine = mine)
         is TdApi.MessageDocument -> DocumentContent(content.document, mine = mine)
         is TdApi.MessagePoll -> PollContent(messageId, content.poll, mine)
+        is TdApi.MessageLocation -> LocationContent(content.location, mediaShape)
+        is TdApi.MessageVenue -> LocationContent(content.venue.location, mediaShape, title = content.venue.title)
         else -> Unit
+    }
+}
+
+/**
+ * Геопозиция в пузыре: мини-карта с сервера Telegram (GetMapThumbnailFile) + булавка,
+ * тап — открыть точку в приложении карт.
+ */
+@Composable
+private fun LocationContent(
+    location: TdApi.Location,
+    mediaShape: androidx.compose.ui.graphics.Shape? = null,
+    title: String? = null,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var mapFile by remember(location.latitude, location.longitude) {
+        mutableStateOf<TdApi.File?>(null)
+    }
+    LaunchedEffect(location.latitude, location.longitude) {
+        TdClient.send(
+            TdApi.GetMapThumbnailFile(location, 15, 384, 192, 2, MessageStore.currentChatId()),
+        ) { obj -> if (obj is TdApi.File) mapFile = obj }
+    }
+    val state = app.fork.messenger.media.rememberFileState(mapFile, autoDownload = true, priority = 20)
+    val shape = mediaShape ?: RoundedCornerShape(14.dp)
+    Column {
+        Box(
+            Modifier
+                .width(320.dp)
+                .height(160.dp)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable {
+                    val lat = location.latitude
+                    val lon = location.longitude
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("geo:$lat,$lon?q=$lat,$lon"),
+                            ),
+                        )
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            state.path?.let { p ->
+                coil.compose.AsyncImage(
+                    model = java.io.File(p),
+                    contentDescription = "карта",
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Icon(
+                ForkIcons.Location,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(36.dp).offset(y = (-10).dp),
+            )
+        }
+        title?.let {
+            Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 
@@ -1810,7 +1880,7 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
     fun refreshRecentMedia() {
         mediaScope.launch {
             recentMedia = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                queryRecentMedia(context, 30)
+                queryRecentMedia(context, 100)
             }
         }
     }
@@ -2035,13 +2105,16 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
         AttachSheet(
             recent = recentMedia,
             onDismiss = { attachMenu = false },
-            onPickRecent = { uri ->
+            onSendSelected = { uris ->
                 attachMenu = false
                 mediaScope.launch {
-                    val m = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        buildPendingMedia(context, uri)
+                    val items = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        uris.mapNotNull { uri -> buildPendingMedia(context, uri) }
                     }
-                    if (m != null) pendingMedia = m
+                    when {
+                        items.size == 1 -> pendingMedia = items[0]
+                        items.size > 1 -> pendingAlbum = items
+                    }
                 }
             },
             onGallery = {
@@ -2130,54 +2203,103 @@ private fun SchedulePickerDialog(onDismiss: () -> Unit, onPick: (Int) -> Unit) {
 }
 
 /**
- * Лист вложений как в TG: сверху живая лента галереи (тап по фото → предпросмотр и отправка),
- * ниже — ряд стеклянных круглых кнопок: Галерея, Файл, Геопозиция, Опрос, Контакт.
+ * Лист вложений как в TG: сверху сетка галереи со всеми последними фото (листается вниз),
+ * тап отмечает фото кружком-счётчиком (до 10 → альбом), кнопка «Отправить (N)».
+ * Внизу — ряд стеклянных круглых кнопок: Галерея, Файл, Геопозиция, Опрос, Контакт.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AttachSheet(
     recent: List<android.net.Uri>,
     onDismiss: () -> Unit,
-    onPickRecent: (android.net.Uri) -> Unit,
+    onSendSelected: (List<android.net.Uri>) -> Unit,
     onGallery: () -> Unit,
     onFile: () -> Unit,
     onLocation: () -> Unit,
     onPoll: () -> Unit,
     onContact: () -> Unit,
 ) {
+    val selected = remember { androidx.compose.runtime.mutableStateListOf<android.net.Uri>() }
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
-        if (recent.isNotEmpty()) {
-            androidx.compose.foundation.lazy.LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                items(recent, key = { it.toString() }) { uri ->
-                    coil.compose.AsyncImage(
-                        model = uri,
-                        contentDescription = null,
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        modifier = Modifier
-                            .size(108.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                            .clickable { onPickRecent(uri) },
-                    )
+        Column(Modifier.fillMaxWidth()) {
+            if (recent.isNotEmpty()) {
+                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                    columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(3),
+                    modifier = Modifier.fillMaxWidth().height(380.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    gridItems(recent, key = { it.toString() }) { uri ->
+                        val index = selected.indexOf(uri)
+                        Box(
+                            Modifier
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                .clickable {
+                                    if (index >= 0) selected.remove(uri)
+                                    else if (selected.size < 10) selected.add(uri)
+                                },
+                        ) {
+                            coil.compose.AsyncImage(
+                                model = uri,
+                                contentDescription = null,
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            // Кружок-счётчик выбора (как в TG).
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(6.dp)
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (index >= 0) MaterialTheme.colorScheme.primary
+                                        else androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.3f),
+                                    )
+                                    .border(
+                                        1.5.dp,
+                                        androidx.compose.ui.graphics.Color.White.copy(alpha = 0.9f),
+                                        CircleShape,
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (index >= 0) {
+                                    Text(
+                                        "${index + 1}",
+                                        color = androidx.compose.ui.graphics.Color.White,
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
+                Spacer(Modifier.height(10.dp))
             }
-            Spacer(Modifier.height(16.dp))
+            if (selected.isNotEmpty()) {
+                androidx.compose.material3.Button(
+                    onClick = { onSendSelected(selected.toList()) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                ) {
+                    Text("Отправить (${selected.size})")
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                GlassAttachButton(ForkIcons.Image, "Галерея", onGallery)
+                GlassAttachButton(ForkIcons.File, "Файл", onFile)
+                GlassAttachButton(ForkIcons.Location, "Геопозиция", onLocation)
+                GlassAttachButton(ForkIcons.Poll, "Опрос", onPoll)
+                GlassAttachButton(ForkIcons.Person, "Контакт", onContact)
+            }
+            Spacer(Modifier.height(28.dp))
         }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            GlassAttachButton(ForkIcons.Image, "Галерея", onGallery)
-            GlassAttachButton(ForkIcons.File, "Файл", onFile)
-            GlassAttachButton(ForkIcons.Location, "Геопозиция", onLocation)
-            GlassAttachButton(ForkIcons.Poll, "Опрос", onPoll)
-            GlassAttachButton(ForkIcons.Person, "Контакт", onContact)
-        }
-        Spacer(Modifier.height(28.dp))
     }
 }
 

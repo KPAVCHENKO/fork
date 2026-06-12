@@ -30,11 +30,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -639,21 +644,85 @@ private fun UpdateBanner(version: String, onClick: () -> Unit) {
     }
 }
 
-/** Ячейка чата 76dp: аватар 56 с онлайн-кольцом, имя, превью, время, бейдж. */
+/** Ячейка чата 76dp: аватар 56 с онлайн-кольцом, имя, превью, время, бейдж.
+ *  Свайп влево — в архив (как в TG); долгое нажатие — контекстное меню. */
 @Composable
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 private fun ChatRow(chat: UiChat, onClick: () -> Unit) {
     val tokens = forkTokens
     var menuOpen by remember { mutableStateOf(false) }
+    val offsetX = remember { androidx.compose.animation.core.Animatable(0f) }
+    val swipeScope = rememberCoroutineScope()
+    Box(Modifier.fillMaxWidth().height(76.dp)) {
+        // Фон, проявляющийся при свайпе влево: синяя плашка «В архив».
+        if (offsetX.value < -1f) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(end = 24.dp),
+                ) {
+                    Icon(
+                        ForkIcons.Archive,
+                        contentDescription = "в архив",
+                        tint = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "В архив",
+                        color = androidx.compose.ui.graphics.Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+        }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(76.dp)
+            .offset { androidx.compose.ui.unit.IntOffset(offsetX.value.toInt(), 0) }
+            .background(MaterialTheme.colorScheme.background)
+            .pointerInput(chat.id) {
+                val trigger = 132.dp.toPx()
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        swipeScope.launch {
+                            if (offsetX.value < -trigger) {
+                                offsetX.animateTo(-size.width.toFloat(), tween(160))
+                                ChatStore.archive(chat.id, true)
+                                offsetX.snapTo(0f)
+                            } else {
+                                offsetX.animateTo(0f, tween(180))
+                            }
+                        }
+                    },
+                ) { change, drag ->
+                    val next = (offsetX.value + drag).coerceAtMost(0f)
+                    if (next < 0f) change.consume()
+                    swipeScope.launch { offsetX.snapTo(next) }
+                }
+            }
             .combinedClickable(onClick = onClick, onLongClick = { menuOpen = true })
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         androidx.compose.material3.DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            if (chat.unread > 0) {
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("Прочитано") },
+                    onClick = { ChatStore.markRead(chat.id); menuOpen = false },
+                )
+            } else {
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("Непрочитано") },
+                    onClick = { ChatStore.markUnread(chat.id); menuOpen = false },
+                )
+            }
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text(if (chat.isPinned) "Открепить" else "Закрепить") },
                 onClick = { ChatStore.togglePin(chat.id); menuOpen = false },
@@ -759,5 +828,6 @@ private fun ChatRow(chat: UiChat, onClick: () -> Unit) {
                 }
             }
         }
+    }
     }
 }
