@@ -571,13 +571,14 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
             }
         }
 
-        // Свайп-назад от левого края экрана (шире, как в Telegram), не мешает свайпу
-        // сообщений (он начинается правее этой зоны).
+        // Свайп-назад от левого края экрана (шире, как в Telegram). Начинается НИЖЕ шапки
+        // (padding top), чтобы не перекрывать кнопку «назад» в левом верхнем углу.
         Box(
             Modifier
                 .fillMaxHeight()
                 .width(48.dp)
                 .align(Alignment.CenterStart)
+                .padding(top = 104.dp)
                 .pointerInput(Unit) {
                     var total = 0f
                     detectHorizontalDragGestures(
@@ -1143,7 +1144,8 @@ fun MessageBubble(
                     .padding(
                         when {
                             isText -> PaddingValues(horizontal = 13.dp, vertical = 8.dp)
-                            isVisualMedia -> PaddingValues(0.dp) // медиа встык к краям пузыря
+                            // медиа и альбомы встык к краям пузыря (без пустого фона сбоку)
+                            isVisualMedia || message.albumMedia.isNotEmpty() -> PaddingValues(0.dp)
                             else -> PaddingValues(4.dp)
                         },
                     ),
@@ -1450,7 +1452,7 @@ private fun LinkPreviewCard(
 @Composable
 private fun AlbumGrid(items: List<AlbumItem>, onOpenMedia: (MediaTarget) -> Unit) {
     val gap = 2.dp
-    val containerW = 250.dp
+    val containerW = 320.dp
     val aspects = remember(items) { items.map { albumAspect(it.content) } }
     val rows = remember(aspects) { justifyAlbumRows(aspects) }
 
@@ -1880,40 +1882,16 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    Box {
-                        IconButton(
-                            onClick = { attachMenu = true },
-                            modifier = Modifier.size(52.dp),
-                        ) {
-                            Icon(
-                                ForkIcons.Attach,
-                                contentDescription = "вложение",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(21.dp),
-                            )
-                        }
-                        androidx.compose.material3.DropdownMenu(
-                            expanded = attachMenu,
-                            onDismissRequest = { attachMenu = false },
-                        ) {
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Фото или видео") },
-                                onClick = {
-                                    attachMenu = false
-                                    pickMedia.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-                                    )
-                                },
-                            )
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Опрос") },
-                                onClick = { attachMenu = false; showPoll = true },
-                            )
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Контакт") },
-                                onClick = { attachMenu = false; showContactPicker = true },
-                            )
-                        }
+                    IconButton(
+                        onClick = { attachMenu = true },
+                        modifier = Modifier.size(52.dp),
+                    ) {
+                        Icon(
+                            ForkIcons.Attach,
+                            contentDescription = "вложение",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(21.dp),
+                        )
                     }
                     Box(
                         Modifier
@@ -2013,6 +1991,19 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
         }
     }
 
+    if (attachMenu) {
+        AttachSheet(
+            onDismiss = { attachMenu = false },
+            onPhoto = {
+                attachMenu = false
+                pickMedia.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+                )
+            },
+            onPoll = { attachMenu = false; showPoll = true },
+            onContact = { attachMenu = false; showContactPicker = true },
+        )
+    }
     if (showPoll) {
         PollDialog(
             onDismiss = { showPoll = false },
@@ -2068,6 +2059,52 @@ private fun SchedulePickerDialog(onDismiss: () -> Unit, onPick: (Int) -> Unit) {
         },
     ) {
         androidx.compose.material3.DatePicker(state = dateState)
+    }
+}
+
+/** Лист вложений (как в TG): фото/видео первым, ниже — опрос, контакт. Стеклянные круглые кнопки. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AttachSheet(
+    onDismiss: () -> Unit,
+    onPhoto: () -> Unit,
+    onPoll: () -> Unit,
+    onContact: () -> Unit,
+) {
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            GlassAttachButton(ForkIcons.Image, "Фото и видео", onPhoto)
+            GlassAttachButton(ForkIcons.Poll, "Опрос", onPoll)
+            GlassAttachButton(ForkIcons.Person, "Контакт", onContact)
+        }
+        Spacer(Modifier.height(28.dp))
+    }
+}
+
+/** Круглая «стеклянная» кнопка вложения с подписью. */
+@Composable
+private fun GlassAttachButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier
+                .size(62.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f))
+                .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

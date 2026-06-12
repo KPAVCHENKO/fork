@@ -777,6 +777,9 @@ object MessageStore {
                 sticker.emoji,
             )
         )
+        // Поднимаем стикер в «Недавние» сразу (TDLib пришлёт UpdateRecentStickers → панель
+        // обновится в реальном времени и отправленный встанет первым, как в TG).
+        TdClient.send(TdApi.AddRecentSticker(false, TdApi.InputFileRemote(remoteId)))
     }
 
     fun sendGif(animation: TdApi.Animation) {

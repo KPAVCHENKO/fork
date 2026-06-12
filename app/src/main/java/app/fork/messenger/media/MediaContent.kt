@@ -72,9 +72,11 @@ private val MAX_MEDIA_H = 400.dp
 private fun displayBox(width: Int, height: Int): Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp> {
     if (width <= 0 || height <= 0) return MAX_MEDIA_W to MAX_MEDIA_W
     val ar = width.toFloat() / height
-    var w = MAX_MEDIA_W
-    var h = MAX_MEDIA_W / ar
-    if (h > MAX_MEDIA_H) { h = MAX_MEDIA_H; w = MAX_MEDIA_H * ar }
+    // Ширина ВСЕГДА полная (как в TG — медиа на всю ширину поста, без пустоты сбоку).
+    // Высота по пропорции, но не выше предела — тогда вертикальное фото обрезается (Crop),
+    // а не сужается. Раньше высокие фото становились узкими → «малюсенькие + пустота справа».
+    val w = MAX_MEDIA_W
+    val h = (MAX_MEDIA_W / ar).coerceAtMost(MAX_MEDIA_H)
     return w to h
 }
 

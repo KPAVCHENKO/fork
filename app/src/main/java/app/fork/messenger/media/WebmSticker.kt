@@ -321,8 +321,8 @@ fun WebmAlphaView(path: String, modifier: Modifier = Modifier) {
 private object WebmEnginePool {
     // Максимум одновременных движков = уникальных пар аппаратных VP9-сессий (цвет+альфа).
     // Декодеры дедуплицированы по пути, так что это считает РАЗНЫЕ стикеры на экране, а не
-    // их копии. Сверх лимита стикер показывает статичную миниатюру, пока не освободится слот.
-    private const val MAX_ENGINES = 8
+    // их копии. Лимит зависит от класса устройства (PerfClass) — на слабых меньше.
+    private val maxEngines: Int get() = app.fork.messenger.PerfClass.maxWebmEngines
 
     private class Engine {
         val frame = mutableStateOf<ImageBitmap?>(null)
@@ -337,7 +337,7 @@ private object WebmEnginePool {
 
     fun acquire(path: String): androidx.compose.runtime.State<ImageBitmap?> = synchronized(lock) {
         engines[path]?.let { it.refs++; return@synchronized it.frame }
-        if (engines.size >= MAX_ENGINES) return@synchronized empty // нет свободного декодера
+        if (engines.size >= maxEngines) return@synchronized empty // нет свободного декодера
         val eng = Engine()
         eng.refs = 1
         eng.job = scope.launch {

@@ -137,6 +137,19 @@ object ForkIcons {
         )
     }
 
+    /** Фото/галерея — вложение. */
+    val Image: ImageVector by lazy {
+        icon(
+            "Image",
+            "M21 19V5c0,-1.1 -0.9,-2 -2,-2H5c-1.1 0,-2 0.9,-2 2v14c0 1.1 0.9 2 2 2h14c1.1 0 2,-0.9 2,-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5,-4.5z",
+        )
+    }
+
+    /** Столбики — опрос. */
+    val Poll: ImageVector by lazy {
+        icon("Poll", "M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z")
+    }
+
     /** Значок GIF — вкладка гифок в панели. */
     val Gif: ImageVector by lazy {
         icon(

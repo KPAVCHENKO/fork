@@ -161,6 +161,7 @@ object TdClient {
         safely("ChatStore") { ChatStore.handleUpdate(obj) }
         safely("MessageStore") { MessageStore.handleUpdate(obj) }
         safely("Notifications") { app.fork.messenger.notify.NotificationsCenter.handleUpdate(obj) }
+        safely("StickerStore") { app.fork.messenger.media.StickerStore.handleUpdate(obj) }
 
         when (obj) {
             is TdApi.UpdateAuthorizationState -> onAuthorizationState(obj.authorizationState)

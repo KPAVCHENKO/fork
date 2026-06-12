@@ -48,6 +48,10 @@ object SettingsStore {
     private val _quickReaction = MutableStateFlow("❤️")
     val quickReaction: StateFlow<String> = _quickReaction.asStateFlow()
 
+    /** Недавно использованные эмодзи (свежие — первыми, как в TG). */
+    private val _recentEmoji = MutableStateFlow<List<String>>(emptyList())
+    val recentEmoji: StateFlow<List<String>> = _recentEmoji.asStateFlow()
+
     // ---------- Обои чата (Fork Design Spec §3.8) ----------
 
     /** Обои по умолчанию для всех чатов. */
@@ -100,6 +104,8 @@ object SettingsStore {
         _enterToSend.value = prefs.getBoolean(KEY_ENTER_SEND, false)
         _fontScale.value = prefs.getFloat("font_scale", 1f).coerceIn(0.85f, 1.4f)
         _quickReaction.value = prefs.getString("quick_reaction", "❤️") ?: "❤️"
+        _recentEmoji.value = prefs.getString("recent_emoji", "")
+            ?.split("")?.filter { it.isNotBlank() } ?: emptyList()
         _defaultWallpaper.value = prefs.getString("wallpaper_default", "glow") ?: "glow"
         _wallpaperDim.value = prefs.getFloat("wallpaper_dim", 0f)
     }
@@ -142,5 +148,12 @@ object SettingsStore {
     fun setQuickReaction(emoji: String) {
         _quickReaction.value = emoji
         prefs.edit().putString("quick_reaction", emoji).apply()
+    }
+
+    fun addRecentEmoji(emoji: String) {
+        if (emoji.isBlank()) return
+        val list = (listOf(emoji) + _recentEmoji.value.filter { it != emoji }).take(24)
+        _recentEmoji.value = list
+        prefs.edit().putString("recent_emoji", list.joinToString("")).apply()
     }
 }

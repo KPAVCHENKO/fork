@@ -200,7 +200,8 @@ private fun TabIcon(
 
 @Composable
 private fun EmojiGrid(onEmoji: (String) -> Unit) {
-    val flat = remember { flattenEmoji() }
+    val recent by app.fork.messenger.SettingsStore.recentEmoji.collectAsStateWithLifecycle()
+    val flat = remember(recent) { flattenEmoji(recent) }
     LazyVerticalGrid(columns = GridCells.Fixed(8), modifier = Modifier.fillMaxSize()) {
         items(flat, span = { e ->
             if (e.header != null) GridItemSpan(maxLineSpan) else GridItemSpan(1)
@@ -218,7 +219,10 @@ private fun EmojiGrid(onEmoji: (String) -> Unit) {
                     Modifier
                         .aspectRatio(1f)
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { onEmoji(e.emoji) },
+                        .clickable {
+                            app.fork.messenger.SettingsStore.addRecentEmoji(e.emoji)
+                            onEmoji(e.emoji)
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(e.emoji, fontSize = 26.sp)
@@ -230,7 +234,11 @@ private fun EmojiGrid(onEmoji: (String) -> Unit) {
 
 private class EmojiItem(val emoji: String, val header: String?)
 
-private fun flattenEmoji(): List<EmojiItem> = buildList {
+private fun flattenEmoji(recent: List<String>): List<EmojiItem> = buildList {
+    if (recent.isNotEmpty()) {
+        add(EmojiItem("", "Недавние"))
+        recent.forEach { add(EmojiItem(it, null)) }
+    }
     EMOJI_CATEGORIES.forEach { (title, list) ->
         add(EmojiItem("", title))
         list.forEach { add(EmojiItem(it, null)) }

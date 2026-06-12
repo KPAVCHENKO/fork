@@ -256,10 +256,13 @@ private fun ForkBottomBar(
                 .fillMaxWidth()
                 .height(50.dp) // на ~15% компактнее (было 58)
                 .clip(shape)
-                // Настоящее «матовое стекло»: размываем контент за панелью (Haze) и кладём
-                // лёгкую подложку-тинт сверху, чтобы кнопки читались на любом фоне.
-                .hazeEffect(hazeState)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.40f))
+                // Матовое стекло: размываем контент за панелью (Haze) + лёгкий тинт. На слабых
+                // устройствах (PerfClass.LOW) размытие выключено — вместо него плотнее тинт.
+                .then(if (PerfClass.blurEnabled) Modifier.hazeEffect(hazeState) else Modifier)
+                .background(
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                        .copy(alpha = if (PerfClass.blurEnabled) 0.40f else 0.74f),
+                )
                 .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f), shape),
             verticalAlignment = Alignment.CenterVertically,
         ) {

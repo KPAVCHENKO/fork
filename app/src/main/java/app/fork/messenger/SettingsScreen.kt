@@ -189,6 +189,9 @@ fun SettingsScreen(onBack: () -> Unit, bottomInset: androidx.compose.ui.unit.Dp 
                 }
             }
 
+            SectionLabel("Хранилище")
+            SettingsCard { StorageSection() }
+
             SectionLabel("Обновления")
             SettingsCard { UpdateSection(updateState, context) }
 
@@ -537,6 +540,50 @@ private fun ToggleRow(
             )
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+    }
+}
+
+/** Размер кэша медиа + очистка (TDLib GetStorageStatisticsFast / OptimizeStorage). */
+@Composable
+private fun StorageSection() {
+    var cacheBytes by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(-1L) }
+    var clearing by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    fun refresh() {
+        TdClient.send(org.drinkless.tdlib.TdApi.GetStorageStatisticsFast()) { res ->
+            (res as? org.drinkless.tdlib.TdApi.StorageStatisticsFast)?.let { cacheBytes = it.filesSize }
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) { refresh() }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text("Кэш медиафайлов", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                when {
+                    clearing -> "Очистка…"
+                    cacheBytes < 0 -> "Подсчёт…"
+                    else -> app.fork.messenger.media.formatBytes(cacheBytes)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(percent = 50))
+            .clickable(enabled = !clearing) {
+                clearing = true
+                TdClient.send(
+                    org.drinkless.tdlib.TdApi.OptimizeStorage(0, 0, 0, 0, null, null, null, false, 0),
+                ) { clearing = false; refresh() }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("Очистить кэш", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
     }
 }
 

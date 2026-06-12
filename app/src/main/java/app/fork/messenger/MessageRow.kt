@@ -61,6 +61,8 @@ fun MessageRow(
     val offsetX = remember { Animatable(0f) }
     var menuOpen by remember { mutableStateOf(false) }
     var reactionPicker by remember { mutableStateOf(false) }
+    // null — скрыто; true — удалить у всех; false — у себя.
+    var deleteConfirm by remember { mutableStateOf<Boolean?>(null) }
     val clipboard = LocalClipboardManager.current
 
     // Режим выбора: тап и долгое нажатие переключают отметку, меню не открывается.
@@ -244,13 +246,13 @@ fun MessageRow(
                 if (message.canDeleteForAll) {
                     DropdownMenuItem(
                         text = { Text("Удалить у всех") },
-                        onClick = { MessageStore.deleteMessage(message.id, true); menuOpen = false },
+                        onClick = { menuOpen = false; deleteConfirm = true },
                     )
                 }
                 if (message.canDelete) {
                     DropdownMenuItem(
                         text = { Text("Удалить у себя") },
-                        onClick = { MessageStore.deleteMessage(message.id, false); menuOpen = false },
+                        onClick = { menuOpen = false; deleteConfirm = false },
                     )
                 }
             }
@@ -261,6 +263,23 @@ fun MessageRow(
         ReactionPickerSheet(
             onPick = { emoji -> MessageStore.toggleReaction(message.id, emoji); reactionPicker = false },
             onDismiss = { reactionPicker = false },
+        )
+    }
+
+    deleteConfirm?.let { forAll ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { deleteConfirm = null },
+            title = { Text("Удалить сообщение?") },
+            text = { Text(if (forAll) "Удалить у всех участников." else "Удалить только у вас.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    MessageStore.deleteMessage(message.id, forAll)
+                    deleteConfirm = null
+                }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { deleteConfirm = null }) { Text("Отмена") }
+            },
         )
     }
 }
