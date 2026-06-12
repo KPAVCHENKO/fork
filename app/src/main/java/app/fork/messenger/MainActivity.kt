@@ -186,6 +186,17 @@ private fun HomeShell(
     onNewChat: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(0) }
+    // История вкладок: «Назад» ведёт на ПРЕДЫДУЩУЮ вкладку (Профиль→Настройки→назад=Профиль),
+    // а не сразу в Чаты.
+    val backStack = remember { androidx.compose.runtime.mutableStateListOf<Int>() }
+    fun goTab(t: Int) {
+        if (t != tab) { backStack.add(tab); tab = t }
+    }
+    fun popTab() {
+        tab = if (backStack.isNotEmpty()) backStack.removeAt(backStack.lastIndex) else 0
+    }
+    androidx.activity.compose.BackHandler(enabled = tab != 0 || backStack.isNotEmpty()) { popTab() }
+
     // Контент уходит ПОД плавающую панель (она прозрачная/размытая), но скроллится с этим
     // нижним отступом, чтобы последние элементы вставали над панелью, а не прятались.
     val bottomInset = 86.dp
@@ -195,14 +206,14 @@ private fun HomeShell(
             when (tab) {
                 0 -> ChatListScreen(
                     onChatClick = onOpenChat,
-                    onSettings = { tab = 2 },
+                    onSettings = { goTab(2) },
                     onOpenArchive = onOpenArchive,
                     onOpenProxy = onOpenProxy,
                     bottomInset = bottomInset,
                 )
                 1 -> ContactsScreen(onOpenChat = onOpenChat, bottomInset = bottomInset)
-                2 -> SettingsScreen(onBack = { tab = 0 }, bottomInset = bottomInset)
-                3 -> ProfileScreen(onOpenChat = onOpenChat, onOpenSettings = { tab = 2 }, bottomInset = bottomInset)
+                2 -> SettingsScreen(onBack = { popTab() }, bottomInset = bottomInset)
+                3 -> ProfileScreen(onOpenChat = onOpenChat, onOpenSettings = { goTab(2) }, bottomInset = bottomInset)
             }
         }
         if (tab == 0) {
@@ -214,7 +225,7 @@ private fun HomeShell(
                     .padding(end = 18.dp, bottom = 74.dp),
             )
         }
-        ForkBottomBar(tab, hazeState, Modifier.align(Alignment.BottomCenter)) { tab = it }
+        ForkBottomBar(tab, hazeState, Modifier.align(Alignment.BottomCenter)) { goTab(it) }
     }
 }
 

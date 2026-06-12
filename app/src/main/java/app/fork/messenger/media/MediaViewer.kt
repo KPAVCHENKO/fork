@@ -3,9 +3,12 @@ package app.fork.messenger.media
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -232,28 +235,9 @@ private fun PhotoViewer(photo: TdApi.Photo, onZoomChange: (Boolean) -> Unit = {}
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
-    val transform = rememberTransformableState { zoomChange, panChange, _ ->
-        val newScale = (scale * zoomChange).coerceIn(1f, 5f)
-        // Зумим/двигаем; пока увеличено — сообщаем наружу, чтобы пейджер не перехватывал
-        // горизонтальный свайп (двигаем фото, а не листаем страницы).
-        if ((newScale > 1.01f) != (scale > 1.01f)) onZoomChange(newScale > 1.01f)
-        scale = newScale
-        if (scale > 1f) {
-            offsetX += panChange.x
-            offsetY += panChange.y
-        } else {
-            offsetX = 0f; offsetY = 0f
-        }
-    }
-    // Двойной тап — переключить зум (приблизить/сбросить).
-    val tapModifier = Modifier.pointerInput(Unit) {
-        detectTapGestures(onDoubleTap = {
-            if (scale > 1.01f) {
-                scale = 1f; offsetX = 0f; offsetY = 0f; onZoomChange(false)
-            } else {
-                scale = 2.5f; onZoomChange(true)
-            }
-        })
+
+    fun reportZoom(prev: Float, now: Float) {
+        if ((now > 1.01f) != (prev > 1.01f)) onZoomChange(now > 1.01f)
     }
 
     val path = state.path
@@ -263,10 +247,42 @@ private fun PhotoViewer(photo: TdApi.Photo, onZoomChange: (Boolean) -> Unit = {}
             scaleX = scale, scaleY = scale,
             translationX = offsetX, translationY = offsetY,
         )
-        // Жесты зума/панорамы перехватываем ТОЛЬКО когда увеличено — иначе горизонтальный
-        // свайп уходит пейджеру и фото листаются (раньше transformable съедал свайп).
-        .transformable(transform, enabled = scale > 1f)
-        .then(tapModifier)
+        // Кастомные жесты (как в TG): ДВА пальца → зум из любого масштаба; ОДИН палец при
+        // увеличении → панорама; ОДИН палец на 1× → НЕ перехватываем, свайп уходит пейджеру
+        // (листание фото). Так и зум плавный, и листание работает.
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                do {
+                    val event = awaitPointerEvent()
+                    val pressed = event.changes.count { it.pressed }
+                    if (pressed >= 2) {
+                        val zoom = event.calculateZoom()
+                        val pan = event.calculatePan()
+                        val prev = scale
+                        scale = (scale * zoom).coerceIn(1f, 5f)
+                        if (scale > 1f) { offsetX += pan.x; offsetY += pan.y } else { offsetX = 0f; offsetY = 0f }
+                        reportZoom(prev, scale)
+                        event.changes.forEach { if (it.positionChanged()) it.consume() }
+                    } else if (pressed == 1 && scale > 1.01f) {
+                        val pan = event.calculatePan()
+                        offsetX += pan.x; offsetY += pan.y
+                        event.changes.forEach { if (it.positionChanged()) it.consume() }
+                    }
+                } while (event.changes.any { it.pressed })
+            }
+        }
+        .pointerInput(Unit) {
+            detectTapGestures(onDoubleTap = {
+                val prev = scale
+                if (scale > 1.01f) {
+                    scale = 1f; offsetX = 0f; offsetY = 0f
+                } else {
+                    scale = 2.8f
+                }
+                reportZoom(prev, scale)
+            })
+        }
 
     when {
         path != null -> AsyncImage(
