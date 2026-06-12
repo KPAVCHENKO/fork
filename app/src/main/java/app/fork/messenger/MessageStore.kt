@@ -501,6 +501,71 @@ object MessageStore {
             canWrite = canWrite,
             userId = userId,
         )
+
+        // Подзаголовок групп/каналов: число участников/подписчиков (как в TG). Тянем
+        // асинхронно и обновляем шапку, если в этот момент никто не «печатает».
+        if (isGroupChat || isChannel) {
+            val applyCount = { n: Int ->
+                if (n > 0 && synchronized(lock) { chatId } == id && TypingTracker.label(id, isGroupChat) == null) {
+                    val word = if (isChannel) {
+                        plural(n, "подписчик", "подписчика", "подписчиков")
+                    } else {
+                        plural(n, "участник", "участника", "участников")
+                    }
+                    _header.value = _header.value?.copy(subtitle = "$n $word")
+                }
+            }
+            when (type) {
+                is TdApi.ChatTypeSupergroup -> TdClient.send(TdApi.GetSupergroup(type.supergroupId)) { res ->
+                    (res as? TdApi.Supergroup)?.let { applyCount(it.memberCount) }
+                }
+                is TdApi.ChatTypeBasicGroup -> TdClient.send(TdApi.GetBasicGroup(type.basicGroupId)) { res ->
+                    (res as? TdApi.BasicGroup)?.let { applyCount(it.memberCount) }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    /** Кэш превью отвечаемых сообщений, подтянутых через GetMessage (по id). */
+    private val repliedCache = java.util.concurrent.ConcurrentHashMap<Long, String>()
+
+    /**
+     * Текст превью ответа. Источники по приоритету: цитата → встроенный контент →
+     * уже загруженное сообщение в чате → подтянутое через GetMessage. Раньше во всех
+     * непокрытых случаях показывалось безликое «Сообщение».
+     */
+    private fun resolveReplyText(replyTo: TdApi.MessageReplyToMessage?): String? {
+        if (replyTo == null) return null
+        replyTo.quote?.text?.text?.takeIf { it.isNotBlank() }?.let { return it }
+        replyTo.content?.let { return MessageFormat.contentText(it) }
+        val mid = replyTo.messageId
+        synchronized(lock) { msgs.firstOrNull { it.id == mid } }?.content?.let {
+            return MessageFormat.contentText(it)
+        }
+        repliedCache[mid]?.let { return it }
+        val chat = synchronized(lock) { chatId }
+        if (chat != 0L && mid != 0L) {
+            TdClient.send(TdApi.GetMessage(chat, mid)) { res ->
+                (res as? TdApi.Message)?.let { rm ->
+                    repliedCache[mid] = MessageFormat.contentText(rm.content)
+                    rebuild()
+                }
+            }
+        }
+        return "Сообщение"
+    }
+
+    /** Русское склонение: 1 участник / 2 участника / 5 участников. */
+    private fun plural(n: Int, one: String, few: String, many: String): String {
+        val mod100 = n % 100
+        val mod10 = n % 10
+        return when {
+            mod100 in 11..14 -> many
+            mod10 == 1 -> one
+            mod10 in 2..4 -> few
+            else -> many
+        }
     }
 
     fun close() {
@@ -1025,8 +1090,7 @@ object MessageStore {
                 isFirstOfGroup = firstOfGroup,
                 isLastOfGroup = lastOfGroup,
                 dateLabel = MessageFormat.dayLabel(m.date),
-                replyText = replyTo?.content?.let { MessageFormat.contentText(it) }
-                    ?: if (replyTo != null) "Сообщение" else null,
+                replyText = resolveReplyText(replyTo),
                 canDelete = chatCanDeleteForSelf || chatCanDeleteForAll || m.isOutgoing,
                 canDeleteForAll = chatCanDeleteForAll || m.isOutgoing,
                 outStatus = when {

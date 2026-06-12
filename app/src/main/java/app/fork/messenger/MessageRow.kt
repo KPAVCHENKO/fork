@@ -83,10 +83,11 @@ fun MessageRow(
     }
 
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val triggerPx = with(density) { 56.dp.toPx() }
-    val maxPx = with(density) { 88.dp.toPx() }
-    // Мёртвая зона: случайные горизонтальные движения не дёргают свайп-ответ.
-    val deadZonePx = with(density) { 30.dp.toPx() }
+    val triggerPx = with(density) { 72.dp.toPx() }
+    val maxPx = with(density) { 96.dp.toPx() }
+    // Большая мёртвая зона: ответ срабатывает только на ОЧЕВИДНЫЙ свайп, а не на любое
+    // лёгкое горизонтальное движение (раньше слишком часто срабатывал случайно).
+    val deadZonePx = with(density) { 48.dp.toPx() }
 
     Box {
         // Иконка ответа в круге проявляется и растёт по мере свайпа (Fork Design Spec §6).

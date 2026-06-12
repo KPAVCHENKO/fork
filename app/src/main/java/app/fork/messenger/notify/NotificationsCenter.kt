@@ -30,6 +30,9 @@ object NotificationsCenter {
     const val CHANNEL_SERVICE = "fork_service"
     const val CHANNEL_MESSAGES = "fork_messages"
     const val EXTRA_CHAT_ID = "chat_id"
+    // Группировка уведомлений (как в TG): все чаты под одной сводкой.
+    private const val GROUP_KEY = "fork_messages_group"
+    private const val SUMMARY_ID = 1
     const val ACTION_REPLY = "app.fork.messenger.REPLY"
     const val ACTION_MARK_READ = "app.fork.messenger.MARK_READ"
     const val KEY_REPLY_TEXT = "reply_text"
@@ -156,13 +159,25 @@ object NotificationsCenter {
             .setLargeIcon(avatarBitmap(chat))
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setGroup(GROUP_KEY)
             .setContentIntent(openChatIntent(context, chat.id))
             .addAction(replyAction(context, chat.id))
             .addAction(markReadAction(context, chat.id))
             .build()
 
+        // Сводка группы: без неё Android 7+ не схлопывает уведомления разных чатов.
+        val summary = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setGroup(GROUP_KEY)
+            .setGroupSummary(true)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setAutoCancel(true)
+            .build()
+
         runCatching {
-            NotificationManagerCompat.from(context).notify(chat.id.toInt(), notification)
+            val nm = NotificationManagerCompat.from(context)
+            nm.notify(chat.id.toInt(), notification)
+            nm.notify(SUMMARY_ID, summary)
         }
     }
 
@@ -233,6 +248,8 @@ object NotificationsCenter {
     fun clearForChat(chatId: Long) {
         conversations.remove(chatId)
         val context = appContext ?: return
-        NotificationManagerCompat.from(context).cancel(chatId.toInt())
+        val nm = NotificationManagerCompat.from(context)
+        nm.cancel(chatId.toInt())
+        if (conversations.isEmpty()) nm.cancel(SUMMARY_ID) // убрать сводку, если чатов больше нет
     }
 }

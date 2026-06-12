@@ -558,17 +558,18 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
             }
         }
 
-        // Свайп-назад от левого края экрана (как в Telegram), не мешает свайпу сообщений.
+        // Свайп-назад от левого края экрана (шире, как в Telegram), не мешает свайпу
+        // сообщений (он начинается правее этой зоны).
         Box(
             Modifier
                 .fillMaxHeight()
-                .width(24.dp)
+                .width(48.dp)
                 .align(Alignment.CenterStart)
                 .pointerInput(Unit) {
                     var total = 0f
                     detectHorizontalDragGestures(
                         onDragEnd = {
-                            if (total > 56.dp.toPx()) onBack()
+                            if (total > 44.dp.toPx()) onBack()
                             total = 0f
                         },
                     ) { change, drag ->
@@ -1103,10 +1104,10 @@ fun MessageBubble(
         ) {
             Column(
                 Modifier
-                    // Для медиа/альбома фиксируем ширину пузыря по ширине фото (252dp),
-                    // чтобы текст переносился по краю фото и сбоку не торчал фон пузыря.
+                    // Для медиа/альбома фиксируем ширину пузыря по ширине фото (как в TG —
+                    // широкие посты), чтобы текст переносился по краю фото и сбоку не торчал фон.
                     .then(
-                        if (isVisualMedia || message.albumMedia.isNotEmpty()) Modifier.width(252.dp)
+                        if (isVisualMedia || message.albumMedia.isNotEmpty()) Modifier.width(320.dp)
                         else Modifier.widthIn(max = 300.dp),
                     )
                     .padding(

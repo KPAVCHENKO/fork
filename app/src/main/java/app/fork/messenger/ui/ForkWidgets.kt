@@ -45,29 +45,18 @@ fun ForkAvatar(
     online: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val ring = forkTokens.brandGradient
-    Box(
-        modifier = modifier
-            .size(size)
-            .drawBehind {
-                if (online) {
-                    drawCircle(brush = ring, style = Stroke(width = 2.dp.toPx()))
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        val inner = if (online) size - 8.dp else size
+    Box(modifier = modifier.size(size), contentAlignment = Alignment.Center) {
         if (avatarPath != null) {
             AsyncImage(
                 model = File(avatarPath),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.size(inner).clip(CircleShape),
+                modifier = Modifier.size(size).clip(CircleShape),
             )
         } else {
             Box(
                 modifier = Modifier
-                    .size(inner)
+                    .size(size)
                     .clip(CircleShape)
                     .background(avatarBrush(seed)),
                 contentAlignment = Alignment.Center,
@@ -76,8 +65,28 @@ fun ForkAvatar(
                     text = initials,
                     fontFamily = Manrope,
                     fontWeight = FontWeight.Bold,
-                    fontSize = (inner.value * 0.36f).sp,
+                    fontSize = (size.value * 0.36f).sp,
                     color = Color.White,
+                )
+            }
+        }
+        // Маленький зелёный кружок «в сети» в правом нижнем углу (как в TG), с
+        // окантовкой цвета фона, чтобы он читался поверх аватара.
+        if (online) {
+            val dot = (size.value * 0.30f).dp.coerceIn(9.dp, 15.dp)
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .size(dot)
+                    .clip(CircleShape)
+                    .background(androidx.compose.material3.MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(dot - 3.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF4DCD5E)),
                 )
             }
         }

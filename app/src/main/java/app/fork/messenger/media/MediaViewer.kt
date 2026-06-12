@@ -245,10 +245,14 @@ private fun PhotoViewer(photo: TdApi.Photo, onZoomChange: (Boolean) -> Unit = {}
             offsetX = 0f; offsetY = 0f
         }
     }
-    // Двойной тап — сбросить зум.
-    val resetModifier = Modifier.pointerInput(Unit) {
+    // Двойной тап — переключить зум (приблизить/сбросить).
+    val tapModifier = Modifier.pointerInput(Unit) {
         detectTapGestures(onDoubleTap = {
-            scale = 1f; offsetX = 0f; offsetY = 0f; onZoomChange(false)
+            if (scale > 1.01f) {
+                scale = 1f; offsetX = 0f; offsetY = 0f; onZoomChange(false)
+            } else {
+                scale = 2.5f; onZoomChange(true)
+            }
         })
     }
 
@@ -259,8 +263,10 @@ private fun PhotoViewer(photo: TdApi.Photo, onZoomChange: (Boolean) -> Unit = {}
             scaleX = scale, scaleY = scale,
             translationX = offsetX, translationY = offsetY,
         )
-        .transformable(transform)
-        .then(resetModifier)
+        // Жесты зума/панорамы перехватываем ТОЛЬКО когда увеличено — иначе горизонтальный
+        // свайп уходит пейджеру и фото листаются (раньше transformable съедал свайп).
+        .transformable(transform, enabled = scale > 1f)
+        .then(tapModifier)
 
     when {
         path != null -> AsyncImage(

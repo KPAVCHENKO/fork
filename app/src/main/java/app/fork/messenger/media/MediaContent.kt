@@ -66,8 +66,8 @@ private fun aspect(width: Int, height: Int): Float =
 // Одиночные фото/видео в пузыре вписываются в ОДИН размер-коробку (как в TG): ширина
 // стандартная, высота по пропорции, но не выше предела. Так горизонтальные не оказываются
 // «маленькими», а вертикальные — «гигантскими» — все смотрятся ровно и продуманно.
-private val MAX_MEDIA_W = 264.dp
-private val MAX_MEDIA_H = 360.dp
+private val MAX_MEDIA_W = 320.dp
+private val MAX_MEDIA_H = 400.dp
 
 private fun displayBox(width: Int, height: Int): Pair<androidx.compose.ui.unit.Dp, androidx.compose.ui.unit.Dp> {
     if (width <= 0 || height <= 0) return MAX_MEDIA_W to MAX_MEDIA_W
