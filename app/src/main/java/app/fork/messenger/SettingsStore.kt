@@ -44,6 +44,10 @@ object SettingsStore {
     private val _fontScale = MutableStateFlow(1f)
     val fontScale: StateFlow<Float> = _fontScale.asStateFlow()
 
+    /** Эмодзи быстрой реакции (двойной тап по сообщению). */
+    private val _quickReaction = MutableStateFlow("❤️")
+    val quickReaction: StateFlow<String> = _quickReaction.asStateFlow()
+
     // ---------- Обои чата (Fork Design Spec §3.8) ----------
 
     /** Обои по умолчанию для всех чатов. */
@@ -95,6 +99,7 @@ object SettingsStore {
         _notificationsEnabled.value = prefs.getBoolean(KEY_NOTIFICATIONS, true)
         _enterToSend.value = prefs.getBoolean(KEY_ENTER_SEND, false)
         _fontScale.value = prefs.getFloat("font_scale", 1f).coerceIn(0.85f, 1.4f)
+        _quickReaction.value = prefs.getString("quick_reaction", "❤️") ?: "❤️"
         _defaultWallpaper.value = prefs.getString("wallpaper_default", "glow") ?: "glow"
         _wallpaperDim.value = prefs.getFloat("wallpaper_dim", 0f)
     }
@@ -132,5 +137,10 @@ object SettingsStore {
     fun setFontScale(scale: Float) {
         _fontScale.value = scale.coerceIn(0.85f, 1.4f)
         prefs.edit().putFloat("font_scale", _fontScale.value).apply()
+    }
+
+    fun setQuickReaction(emoji: String) {
+        _quickReaction.value = emoji
+        prefs.edit().putString("quick_reaction", emoji).apply()
     }
 }

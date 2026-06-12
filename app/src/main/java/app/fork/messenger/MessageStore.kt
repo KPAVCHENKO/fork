@@ -415,6 +415,48 @@ object MessageStore {
         return !s.useDefaultMuteFor && s.muteFor > 0
     }
 
+    /** Заглушить чат на заданное число секунд (0 = включить звук). */
+    fun muteFor(chatId: Long, seconds: Int) {
+        if (chatId == 0L) return
+        val cur = ChatStore.chat(chatId)?.notificationSettings ?: TdApi.ChatNotificationSettings()
+        cur.useDefaultMuteFor = false
+        cur.muteFor = seconds
+        TdClient.send(TdApi.SetChatNotificationSettings(chatId, cur))
+    }
+
+    fun isPrivateChat(chatId: Long): Boolean = ChatStore.chat(chatId)?.type is TdApi.ChatTypePrivate
+
+    /** Блокирует/разблокирует собеседника личного чата. */
+    fun blockUser(chatId: Long, block: Boolean = true) {
+        val userId = (ChatStore.chat(chatId)?.type as? TdApi.ChatTypePrivate)?.userId ?: return
+        TdClient.send(
+            TdApi.SetMessageSenderBlockList(
+                TdApi.MessageSenderUser(userId),
+                if (block) TdApi.BlockListMain() else null,
+            ),
+        )
+    }
+
+    /** Пересылает сообщение в «Избранное» (чат с самим собой). */
+    fun forwardToSaved(messageId: Long) {
+        val from = synchronized(lock) { chatId }
+        if (from == 0L) return
+        TdClient.send(TdApi.GetMe()) { me ->
+            if (me is TdApi.User) {
+                TdClient.send(
+                    TdApi.ForwardMessages(me.id, null, from, longArrayOf(messageId), null, false, false),
+                )
+            }
+        }
+    }
+
+    /** Запускает расшифровку голосового/видео-сообщения (результат придёт в его content). */
+    fun recognizeSpeech(messageId: Long) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        TdClient.send(TdApi.RecognizeSpeech(id, messageId))
+    }
+
     /**
      * Marks messages up to [messageId] as read (forceRead), as the user scrolls them
      * into view. This is what clears the unread counter — opening at the unread anchor

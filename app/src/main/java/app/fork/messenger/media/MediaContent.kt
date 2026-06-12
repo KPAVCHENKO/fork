@@ -349,6 +349,17 @@ fun VoiceContent(voice: TdApi.VoiceNote, mine: Boolean) {
                     )
                 }
             }
+            // Расшифровка голосового (появляется после «Расшифровать» в меню сообщения).
+            val rec = voice.speechRecognitionResult
+            if (rec is TdApi.SpeechRecognitionResultText && rec.text.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    rec.text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (mine) Color.White else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.widthIn(max = 210.dp),
+                )
+            }
         }
     }
 }

@@ -26,8 +26,8 @@ android {
         applicationId = "app.fork.messenger"
         minSdk = 26
         targetSdk = 36
-        versionCode = 32
-        versionName = "0.31.0"
+        versionCode = 33
+        versionName = "0.32.0"
 
         // Только ABI, для которых собрана TDLib (см. tdlib/src/main/jniLibs)
         ndk {
@@ -120,6 +120,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.lottie.compose)
+    implementation(libs.haze)
 
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)

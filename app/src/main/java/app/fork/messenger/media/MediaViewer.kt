@@ -3,6 +3,7 @@ package app.fork.messenger.media
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -67,6 +70,8 @@ fun MediaViewer(targets: List<MediaTarget>, startIndex: Int, onClose: () -> Unit
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(
         initialPage = startIndex.coerceIn(0, targets.size - 1),
     ) { targets.size }
+    // Когда текущее фото увеличено — отключаем листание, чтобы свайп двигал фото.
+    var zoomed by remember { mutableStateOf(false) }
 
     Box(
         Modifier
@@ -78,9 +83,14 @@ fun MediaViewer(targets: List<MediaTarget>, startIndex: Int, onClose: () -> Unit
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             pageSpacing = 16.dp,
+            userScrollEnabled = !zoomed,
         ) { page ->
+            val isCurrent = page == pagerState.currentPage
             when (val t = targets[page]) {
-                is MediaTarget.Photo -> PhotoViewer(t.photo)
+                is MediaTarget.Photo -> PhotoViewer(
+                    t.photo,
+                    onZoomChange = { if (isCurrent) zoomed = it },
+                )
                 is MediaTarget.Video -> VideoViewer(t.video)
             }
         }
@@ -212,7 +222,7 @@ private fun saveToGallery(context: android.content.Context, srcPath: String, isV
     }.getOrDefault(false)
 
 @Composable
-private fun PhotoViewer(photo: TdApi.Photo) {
+private fun PhotoViewer(photo: TdApi.Photo, onZoomChange: (Boolean) -> Unit = {}) {
     val size = photo.fullSize() ?: photo.inlineSize() ?: return
     val state = rememberFileState(size.photo, autoDownload = true, priority = 32)
     val mini = remember(photo.minithumbnail) {
@@ -223,10 +233,23 @@ private fun PhotoViewer(photo: TdApi.Photo) {
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
     val transform = rememberTransformableState { zoomChange, panChange, _ ->
-        scale = (scale * zoomChange).coerceIn(1f, 5f)
-        offsetX += panChange.x
-        offsetY += panChange.y
-        if (scale == 1f) { offsetX = 0f; offsetY = 0f }
+        val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+        // Зумим/двигаем; пока увеличено — сообщаем наружу, чтобы пейджер не перехватывал
+        // горизонтальный свайп (двигаем фото, а не листаем страницы).
+        if ((newScale > 1.01f) != (scale > 1.01f)) onZoomChange(newScale > 1.01f)
+        scale = newScale
+        if (scale > 1f) {
+            offsetX += panChange.x
+            offsetY += panChange.y
+        } else {
+            offsetX = 0f; offsetY = 0f
+        }
+    }
+    // Двойной тап — сбросить зум.
+    val resetModifier = Modifier.pointerInput(Unit) {
+        detectTapGestures(onDoubleTap = {
+            scale = 1f; offsetX = 0f; offsetY = 0f; onZoomChange(false)
+        })
     }
 
     val path = state.path
@@ -237,6 +260,7 @@ private fun PhotoViewer(photo: TdApi.Photo) {
             translationX = offsetX, translationY = offsetY,
         )
         .transformable(transform)
+        .then(resetModifier)
 
     when {
         path != null -> AsyncImage(

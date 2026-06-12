@@ -138,7 +138,7 @@ fun MessageRow(
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { menuOpen = true },
-                    onDoubleClick = { MessageStore.toggleReaction(message.id, "❤️") },
+                    onDoubleClick = { MessageStore.toggleReaction(message.id, SettingsStore.quickReaction.value) },
                 ),
         ) {
             MessageBubble(message, onOpenMedia, onOpenStickerSet, animateStickers)
@@ -175,6 +175,18 @@ fun MessageRow(
                         menuOpen = false
                     },
                 )
+                DropdownMenuItem(
+                    text = { Text("В избранное") },
+                    onClick = { MessageStore.forwardToSaved(message.id); menuOpen = false },
+                )
+                if (message.content is org.drinkless.tdlib.TdApi.MessageVoiceNote ||
+                    message.content is org.drinkless.tdlib.TdApi.MessageVideoNote
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Расшифровать") },
+                        onClick = { MessageStore.recognizeSpeech(message.id); menuOpen = false },
+                    )
+                }
                 DropdownMenuItem(
                     text = { Text("Копировать ссылку") },
                     onClick = {

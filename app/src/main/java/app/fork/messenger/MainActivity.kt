@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,6 +46,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.fork.messenger.notify.NotificationsCenter
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import app.fork.messenger.ui.ForkTheme
 
 class MainActivity : ComponentActivity() {
@@ -182,21 +186,24 @@ private fun HomeShell(
     onNewChat: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(0) }
-    // Контент уходит ПОД плавающую панель (она прозрачная), но скроллится с этим нижним
-    // отступом, чтобы последние элементы вставали над панелью, а не прятались под ней.
+    // Контент уходит ПОД плавающую панель (она прозрачная/размытая), но скроллится с этим
+    // нижним отступом, чтобы последние элементы вставали над панелью, а не прятались.
     val bottomInset = 86.dp
+    val hazeState = remember { HazeState() }
     Box(Modifier.fillMaxSize()) {
-        when (tab) {
-            0 -> ChatListScreen(
-                onChatClick = onOpenChat,
-                onSettings = { tab = 2 },
-                onOpenArchive = onOpenArchive,
-                onOpenProxy = onOpenProxy,
-                bottomInset = bottomInset,
-            )
-            1 -> ContactsScreen(onOpenChat = onOpenChat, bottomInset = bottomInset)
-            2 -> SettingsScreen(onBack = { tab = 0 }, bottomInset = bottomInset)
-            3 -> ProfileScreen(onOpenChat = onOpenChat, onOpenSettings = { tab = 2 }, bottomInset = bottomInset)
+        Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+            when (tab) {
+                0 -> ChatListScreen(
+                    onChatClick = onOpenChat,
+                    onSettings = { tab = 2 },
+                    onOpenArchive = onOpenArchive,
+                    onOpenProxy = onOpenProxy,
+                    bottomInset = bottomInset,
+                )
+                1 -> ContactsScreen(onOpenChat = onOpenChat, bottomInset = bottomInset)
+                2 -> SettingsScreen(onBack = { tab = 0 }, bottomInset = bottomInset)
+                3 -> ProfileScreen(onOpenChat = onOpenChat, onOpenSettings = { tab = 2 }, bottomInset = bottomInset)
+            }
         }
         if (tab == 0) {
             NewChatFab(
@@ -207,14 +214,19 @@ private fun HomeShell(
                     .padding(end = 18.dp, bottom = 74.dp),
             )
         }
-        ForkBottomBar(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
+        ForkBottomBar(tab, hazeState, Modifier.align(Alignment.BottomCenter)) { tab = it }
     }
 }
 
 /** Плавающая «стеклянная» нижняя навигация (как в TG): скруглённая, ПРОЗРАЧНАЯ
  *  (контент виден за ней), компактная — занимает мало места и парит над контентом. */
 @Composable
-private fun ForkBottomBar(current: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
+private fun ForkBottomBar(
+    current: Int,
+    hazeState: HazeState,
+    modifier: Modifier = Modifier,
+    onSelect: (Int) -> Unit,
+) {
     val items = listOf(
         Triple(0, app.fork.messenger.ui.ForkIcons.Chats, "Чаты"),
         Triple(1, app.fork.messenger.ui.ForkIcons.Group, "Контакты"),
@@ -233,10 +245,11 @@ private fun ForkBottomBar(current: Int, modifier: Modifier = Modifier, onSelect:
                 .fillMaxWidth()
                 .height(50.dp) // на ~15% компактнее (было 58)
                 .clip(shape)
-                // Прозрачное «стекло»: фон чуть-чуть, чтобы кнопки читались, но контент
-                // за панелью просвечивал; тонкая светлая окантовка очерчивает форму.
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.42f))
-                .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f), shape),
+                // Настоящее «матовое стекло»: размываем контент за панелью (Haze) и кладём
+                // лёгкую подложку-тинт сверху, чтобы кнопки читались на любом фоне.
+                .hazeEffect(hazeState)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.40f))
+                .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f), shape),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             items.forEach { (i, icon, label) ->

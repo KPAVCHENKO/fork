@@ -154,6 +154,8 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     var showClearConfirm by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showAutoDelete by remember { mutableStateOf(false) }
+    var showMuteOptions by remember { mutableStateOf(false) }
+    var showBlockConfirm by remember { mutableStateOf(false) }
     var stickerSetId by remember { mutableStateOf<Long?>(null) }
 
     // Назад: сперва закрыть клавиатуру, потом выбор/поиск, и только потом выйти из чата.
@@ -352,12 +354,19 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                         onClick = { topMenuOpen = false; showWallpaperSheet = true },
                                     )
                                     androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text(if (MessageStore.isMuted(chatId)) "Включить звук" else "Без звука") },
+                                        text = { Text(if (MessageStore.isMuted(chatId)) "Включить звук" else "Без звука…") },
                                         onClick = {
                                             topMenuOpen = false
-                                            MessageStore.toggleMute(chatId, !MessageStore.isMuted(chatId))
+                                            if (MessageStore.isMuted(chatId)) MessageStore.muteFor(chatId, 0)
+                                            else showMuteOptions = true
                                         },
                                     )
+                                    if (MessageStore.isPrivateChat(chatId)) {
+                                        androidx.compose.material3.DropdownMenuItem(
+                                            text = { Text("Заблокировать") },
+                                            onClick = { topMenuOpen = false; showBlockConfirm = true },
+                                        )
+                                    }
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text(if (MessageStore.isPinnedChat(chatId)) "Открепить чат" else "Закрепить чат") },
                                         onClick = {
@@ -619,7 +628,56 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
         if (showAutoDelete) {
             AutoDeleteDialog(chatId = chatId, onDismiss = { showAutoDelete = false })
         }
+        if (showMuteOptions) {
+            MuteOptionsDialog(chatId = chatId, onDismiss = { showMuteOptions = false })
+        }
+        if (showBlockConfirm) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showBlockConfirm = false },
+                title = { Text("Заблокировать?") },
+                text = { Text("Пользователь больше не сможет писать вам.") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        MessageStore.blockUser(chatId, true)
+                        showBlockConfirm = false
+                    }) { Text("Заблокировать", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showBlockConfirm = false }) { Text("Отмена") }
+                },
+            )
+        }
     }
+}
+
+/** Диалог выбора длительности «без звука». */
+@Composable
+private fun MuteOptionsDialog(chatId: Long, onDismiss: () -> Unit) {
+    val options = listOf(
+        "На 1 час" to 3600,
+        "На 8 часов" to 28_800,
+        "На 2 дня" to 172_800,
+        "Навсегда" to Int.MAX_VALUE,
+    )
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Без звука") },
+        text = {
+            Column {
+                options.forEach { (label, secs) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { MessageStore.muteFor(chatId, secs); onDismiss() }
+                            .padding(vertical = 12.dp),
+                    ) { Text(label, style = MaterialTheme.typography.bodyLarge) }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Отмена") }
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

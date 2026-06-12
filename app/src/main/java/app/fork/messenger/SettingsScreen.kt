@@ -458,6 +458,8 @@ private fun BehaviorSection(context: android.content.Context) {
         onCheckedChange = { SettingsStore.setEnterToSend(it) },
     )
     Spacer(Modifier.height(12.dp))
+    QuickReactionSetting()
+    Spacer(Modifier.height(12.dp))
     GradientButton(
         text = "Отключить экономию батареи",
         onClick = {
@@ -474,6 +476,40 @@ private fun BehaviorSection(context: android.content.Context) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp),
     )
+}
+
+/** Выбор эмодзи быстрой реакции (двойной тап по сообщению). */
+@Composable
+private fun QuickReactionSetting() {
+    val current by SettingsStore.quickReaction.collectAsStateWithLifecycle()
+    val options = listOf("❤️", "👍", "🔥", "😁", "😢", "🎉", "👏", "🙏")
+    Column(Modifier.fillMaxWidth()) {
+        Text("Быстрая реакция", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            "Эмодзи при двойном тапе по сообщению",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.forEach { e ->
+                val sel = e == current
+                Box(
+                    Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (sel) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                            else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        )
+                        .clickable { SettingsStore.setQuickReaction(e) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(e, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
+    }
 }
 
 @Composable
