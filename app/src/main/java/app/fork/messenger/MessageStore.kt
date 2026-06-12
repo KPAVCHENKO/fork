@@ -707,6 +707,8 @@ object MessageStore {
         val text = (m.content as? TdApi.MessageText)?.text?.text
             ?: (m.content as? TdApi.MessagePhoto)?.caption?.text
             ?: (m.content as? TdApi.MessageVideo)?.caption?.text
+            ?: (m.content as? TdApi.MessageAnimation)?.caption?.text
+            ?: (m.content as? TdApi.MessageDocument)?.caption?.text
             ?: return
         _reply.value = null
         _editing.value = EditDraft(messageId, text)
@@ -718,8 +720,71 @@ object MessageStore {
 
     fun submitEdit(newText: String) {
         val draft = _editing.value ?: return
-        editMessageText(draft.messageId, newText)
+        val id = synchronized(lock) { chatId }
+        val m = synchronized(lock) { msgs.firstOrNull { it.id == draft.messageId } }
+        val isMedia = m?.content is TdApi.MessagePhoto || m?.content is TdApi.MessageVideo ||
+            m?.content is TdApi.MessageAnimation || m?.content is TdApi.MessageDocument
+        if (isMedia && id != 0L) {
+            // Медиа редактируется через подпись (EditMessageText на фото/видео падает).
+            TdClient.send(
+                TdApi.EditMessageCaption(
+                    id, draft.messageId, null,
+                    TdApi.FormattedText(newText.trim(), null), false,
+                ),
+            )
+        } else {
+            editMessageText(draft.messageId, newText)
+        }
         _editing.value = null
+    }
+
+    // ---------- v0.27 фичи: дата, автоудаление, закреп чата, ссылка, избранные стикеры/GIF ----------
+
+    /** Переход к сообщению по дате (календарь). */
+    fun jumpToDate(dateUnix: Int) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        TdClient.send(TdApi.GetChatMessageByDate(id, dateUnix)) { res ->
+            (res as? TdApi.Message)?.let { jumpTo(it.id) }
+        }
+    }
+
+    /** Таймер автоудаления чата (0 = выкл). */
+    fun setAutoDelete(chatId: Long, seconds: Int) {
+        if (chatId == 0L) return
+        TdClient.send(TdApi.SetChatMessageAutoDeleteTime(chatId, seconds))
+    }
+
+    /** Текущий таймер автоудаления (сек). */
+    fun autoDeleteTime(chatId: Long): Int = ChatStore.chat(chatId)?.messageAutoDeleteTime ?: 0
+
+    fun togglePinChat(chatId: Long, pin: Boolean) {
+        if (chatId == 0L) return
+        TdClient.send(TdApi.ToggleChatIsPinned(TdApi.ChatListMain(), chatId, pin))
+    }
+
+    fun isPinnedChat(chatId: Long): Boolean {
+        val chat = ChatStore.chat(chatId) ?: return false
+        return chat.positions?.any { it.list is TdApi.ChatListMain && it.isPinned } == true
+    }
+
+    /** Получает ссылку на сообщение (для супергрупп/каналов) и отдаёт в колбэк. */
+    fun messageLink(messageId: Long, onResult: (String?) -> Unit) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) { onResult(null); return }
+        TdClient.send(TdApi.GetMessageLink(id, messageId, 0, 0, "", false, false)) { res ->
+            onResult((res as? TdApi.MessageLink)?.link)
+        }
+    }
+
+    fun favoriteSticker(sticker: TdApi.Sticker) {
+        val remoteId = sticker.sticker.remote?.id ?: return
+        TdClient.send(TdApi.AddFavoriteSticker(TdApi.InputFileRemote(remoteId)))
+    }
+
+    fun saveAnimation(animation: TdApi.Animation) {
+        val remoteId = animation.animation.remote?.id ?: return
+        TdClient.send(TdApi.AddSavedAnimation(TdApi.InputFileRemote(remoteId)))
     }
 
     // ---------- Ответы и удаление ----------

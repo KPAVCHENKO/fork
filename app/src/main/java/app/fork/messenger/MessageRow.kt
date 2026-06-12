@@ -175,6 +175,27 @@ fun MessageRow(
                         menuOpen = false
                     },
                 )
+                DropdownMenuItem(
+                    text = { Text("Копировать ссылку") },
+                    onClick = {
+                        MessageStore.messageLink(message.id) { link ->
+                            link?.let { l -> scope.launch { clipboard.setText(AnnotatedString(l)) } }
+                        }
+                        menuOpen = false
+                    },
+                )
+                (message.content as? org.drinkless.tdlib.TdApi.MessageSticker)?.let { st ->
+                    DropdownMenuItem(
+                        text = { Text("В избранные стикеры") },
+                        onClick = { MessageStore.favoriteSticker(st.sticker); menuOpen = false },
+                    )
+                }
+                (message.content as? org.drinkless.tdlib.TdApi.MessageAnimation)?.let { anim ->
+                    DropdownMenuItem(
+                        text = { Text("Сохранить GIF") },
+                        onClick = { MessageStore.saveAnimation(anim.animation); menuOpen = false },
+                    )
+                }
                 if (message.isMine && message.text.isNotBlank()) {
                     DropdownMenuItem(
                         text = { Text("Изменить") },

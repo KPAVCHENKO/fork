@@ -152,6 +152,8 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var topMenuOpen by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showAutoDelete by remember { mutableStateOf(false) }
     var stickerSetId by remember { mutableStateOf<Long?>(null) }
 
     // Назад: сперва закрыть клавиатуру, потом выбор/поиск, и только потом выйти из чата.
@@ -355,6 +357,21 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                             topMenuOpen = false
                                             MessageStore.toggleMute(chatId, !MessageStore.isMuted(chatId))
                                         },
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(if (MessageStore.isPinnedChat(chatId)) "Открепить чат" else "Закрепить чат") },
+                                        onClick = {
+                                            topMenuOpen = false
+                                            MessageStore.togglePinChat(chatId, !MessageStore.isPinnedChat(chatId))
+                                        },
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Перейти к дате") },
+                                        onClick = { topMenuOpen = false; showDatePicker = true },
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Автоудаление") },
+                                        onClick = { topMenuOpen = false; showAutoDelete = true },
                                     )
                                     androidx.compose.material3.DropdownMenuItem(
                                         text = { Text("Отметить непрочитанным") },
@@ -588,7 +605,72 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                 },
             )
         }
+
+        if (showDatePicker) {
+            JumpToDateDialog(onDismiss = { showDatePicker = false })
+        }
+        if (showAutoDelete) {
+            AutoDeleteDialog(chatId = chatId, onDismiss = { showAutoDelete = false })
+        }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun JumpToDateDialog(onDismiss: () -> Unit) {
+    val dateState = androidx.compose.material3.rememberDatePickerState()
+    androidx.compose.material3.DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                dateState.selectedDateMillis?.let { MessageStore.jumpToDate((it / 1000).toInt()) }
+                onDismiss()
+            }) { Text("Перейти") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Отмена") }
+        },
+    ) {
+        androidx.compose.material3.DatePicker(state = dateState)
+    }
+}
+
+@Composable
+private fun AutoDeleteDialog(chatId: Long, onDismiss: () -> Unit) {
+    val options = listOf(
+        "Выключено" to 0,
+        "1 день" to 86_400,
+        "1 неделя" to 604_800,
+        "1 месяц" to 2_592_000,
+    )
+    val current = MessageStore.autoDeleteTime(chatId)
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Автоудаление сообщений") },
+        text = {
+            Column {
+                options.forEach { (label, secs) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { MessageStore.setAutoDelete(chatId, secs); onDismiss() }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = current == secs,
+                            onClick = { MessageStore.setAutoDelete(chatId, secs); onDismiss() },
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(label)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Закрыть") }
+        },
+    )
 }
 
 /** Диалог перевода сообщения (TDLib TranslateMessageText). */

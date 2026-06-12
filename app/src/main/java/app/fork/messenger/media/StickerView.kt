@@ -53,9 +53,10 @@ import org.drinkless.tdlib.TdApi
 private const val MAX_CONCURRENT_ANIMATIONS = 4
 private val activeAnimations = AtomicInteger(0)
 
-// A WEBM player only starts after the list has been idle this long, so stop-start
-// scrolling never spins up VP9 decoders on every micro-pause.
-private const val WEBM_IDLE_DELAY_MS = 400L
+// A WEBM player starts shortly after scrolling settles. Kept low so playback feels
+// near-instant (was 400 ms — felt like a half-second lag), but non-zero so a quick
+// flick-through doesn't spin up VP9 decoders on every micro-pause.
+private const val WEBM_IDLE_DELAY_MS = 130L
 
 /** path -> inflated Lottie JSON, so scrolling back doesn't re-inflate. */
 private val tgsJsonCache = android.util.LruCache<String, String>(24)
