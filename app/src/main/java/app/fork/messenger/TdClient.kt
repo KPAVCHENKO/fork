@@ -74,7 +74,8 @@ object TdClient {
         kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default,
     )
     private var watchdogJob: kotlinx.coroutines.Job? = null
-    @Volatile private var failoverTried = false
+    /** Last time we re-selected a proxy; gates re-selection so it cannot churn. */
+    @Volatile private var lastSelectionMs = 0L
 
     /** Wall-clock at process start, for per-phase connection timing logs. */
     @Volatile private var connectStartMs = 0L
@@ -176,14 +177,12 @@ object TdClient {
                 Log.i("ForkConnect", "${obj.state.javaClass.simpleName} @ +${elapsed}ms")
                 if (obj.state is TdApi.ConnectionStateReady) {
                     watchdogJob?.cancel()
-                    failoverTried = false // fresh episode next time we drop
-                    // Connection is up — now safe to tidy up stale proxies (deferred so
-                    // it never delays the handshake).
+                    // Connection is up — refresh the proxy entries' "active" marker.
                     if (::appContext.isInitialized) {
-                        app.fork.messenger.net.ProxyPool.cleanupKeepingPrimary(appContext)
+                        app.fork.messenger.net.ProxyPool.refreshEntries(appContext)
                     }
                 } else {
-                    armProxyWatchdog()
+                    armProxyWatchdog(initialDelayMs = 12_000)
                 }
             }
 
@@ -327,22 +326,37 @@ object TdClient {
     }
 
     /**
-     * Conservative failover: only if we still aren't connected 30s after going
-     * offline, try the saved proxy pool ONCE (e.g. primary blocked / VPN). Never
-     * loops — runs at most once per disconnect episode, so it cannot interrupt a
-     * handshake that is simply taking a while.
+     * Failover watchdog: while we are NOT connected, periodically pick a working
+     * proxy from the pool. Gated by [lastSelectionMs] so a selection runs at most
+     * ~once per 25s — it can recover from a dead/blocked proxy (incl. when a VPN is
+     * toggled) without ever churning a handshake that is simply in progress.
      */
-    private fun armProxyWatchdog() {
-        if (watchdogJob?.isActive == true || failoverTried) return
+    private fun armProxyWatchdog(initialDelayMs: Long) {
+        if (watchdogJob?.isActive == true) return
         if (!::appContext.isInitialized) return
         watchdogJob = watchdogScope.launch {
-            kotlinx.coroutines.delay(30_000)
-            if (_connectionState.value != "подключено") {
-                failoverTried = true
-                Log.w(TAG, "still not connected after 30s — trying proxy failover")
-                app.fork.messenger.net.ProxyPool.selectBestAndEnable(appContext)
+            kotlinx.coroutines.delay(initialDelayMs)
+            while (_connectionState.value != "подключено") {
+                if (System.currentTimeMillis() - lastSelectionMs > 25_000) {
+                    lastSelectionMs = System.currentTimeMillis()
+                    app.fork.messenger.net.ProxyPool.selectWorking(appContext, "stall")
+                }
+                kotlinx.coroutines.delay(8_000)
             }
         }
+    }
+
+    /**
+     * Called by NetworkMonitor when the device network changes (incl. VPN on/off).
+     * NetworkMonitor already pushed the new network type. If the active proxy stops
+     * working on the new network, re-select soon so a VPN-compatible proxy is chosen.
+     */
+    fun onNetworkChanged() {
+        if (!::appContext.isInitialized) return
+        if (_connectionState.value == "подключено") return // active proxy still works
+        watchdogJob?.cancel()
+        lastSelectionMs = 0L // a real network change justifies an immediate re-select
+        armProxyWatchdog(initialDelayMs = 5_000)
     }
 
     private fun humanReadableError(error: TdApi.Error): String = when (error.message) {

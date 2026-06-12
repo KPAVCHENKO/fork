@@ -59,9 +59,14 @@ fun SettingsScreen(onBack: () -> Unit) {
     val updateState by UpdateManager.state.collectAsStateWithLifecycle()
     var showSessions by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var showWallpapers by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var showProxy by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     if (showSessions) {
         SessionsScreen(onBack = { showSessions = false })
+        return
+    }
+    if (showProxy) {
+        ProxyScreen(onBack = { showProxy = false })
         return
     }
     if (showWallpapers) {
@@ -155,6 +160,26 @@ fun SettingsScreen(onBack: () -> Unit) {
                         Text("Активные сессии", style = MaterialTheme.typography.bodyLarge)
                         Text(
                             "Устройства, где выполнен вход в аккаунт",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            SectionLabel("Соединение")
+            SettingsCard {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showProxy = true }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Прокси", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Список прокси, статус и переключение",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

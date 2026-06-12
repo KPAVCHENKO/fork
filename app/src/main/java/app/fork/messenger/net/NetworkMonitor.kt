@@ -20,6 +20,7 @@ object NetworkMonitor {
 
     @Volatile
     private var connectivity: ConnectivityManager? = null
+    @Volatile private var lastVpn = false
 
     fun init(context: Context) {
         if (connectivity != null) return
@@ -27,15 +28,35 @@ object NetworkMonitor {
         connectivity = cm
         runCatching {
             cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) = push("available")
+                override fun onAvailable(network: Network) = onChange("available")
                 override fun onLost(network: Network) {
                     Log.i(TAG, "network lost")
                     TdClient.send(TdApi.SetNetworkType(TdApi.NetworkTypeNone()))
+                    TdClient.onNetworkChanged()
                 }
-                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = push("changed")
+                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = onChange("changed")
             })
         }.onFailure { Log.w(TAG, "network callback unavailable: ${it.message}") }
+        lastVpn = isVpnActive()
         push("init")
+    }
+
+    /** Network changed: tell TDLib the new type, and let the proxy manager react
+     *  (especially when a VPN was toggled — the set of working proxies changes). */
+    private fun onChange(reason: String) {
+        val vpn = isVpnActive()
+        val vpnToggled = vpn != lastVpn
+        lastVpn = vpn
+        push(if (vpnToggled) "$reason/vpn=$vpn" else reason)
+        TdClient.onNetworkChanged()
+    }
+
+    /** True if the active network runs over a VPN. */
+    fun isVpnActive(): Boolean {
+        val cm = connectivity ?: return false
+        val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) } ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) ||
+            !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
     }
 
     /** Текущий тип сети для TDLib. */
