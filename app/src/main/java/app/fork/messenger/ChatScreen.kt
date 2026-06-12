@@ -421,7 +421,9 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                     else selection.add(message.id)
                                 },
                                 onOpenStickerSet = { stickerSetId = it },
-                                animateStickers = !isScrolling,
+                                // rlottie is cheap enough to animate every visible
+                                // sticker (LazyColumn only composes on-screen items).
+                                animateStickers = true,
                             )
                         }
                     }
@@ -711,9 +713,33 @@ fun MessageBubble(
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
             horizontalAlignment = if (message.isMine) Alignment.End else Alignment.Start,
         ) {
-            // Анимируем только когда список не скроллится (play=animateStickers).
-            StickerContent(content.sticker, play = animateStickers) {
-                if (content.sticker.setId != 0L) onOpenStickerSet(content.sticker.setId)
+            if (message.showSender && message.senderName != null) {
+                Text(
+                    text = message.senderName,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = senderColor(message.senderSeed),
+                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+                )
+            }
+            Box {
+                StickerContent(content.sticker, play = animateStickers) {
+                    if (content.sticker.setId != 0L) onOpenStickerSet(content.sticker.setId)
+                }
+                // Время + галочки капсулой в углу стикера (как в Telegram).
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(Color(0x8C050912))
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                ) {
+                    TimeStatus(message.time, message.outStatus, mine = true)
+                }
+            }
+            if (message.reactions.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                ReactionChips(message.id, message.reactions, mine = message.isMine)
             }
         }
         return
@@ -745,7 +771,7 @@ fun MessageBubble(
     // «Голое» медиа без подписи/ответа/имени — чистое фото без пузыря (как в Telegram),
     // время — капсулой поверх угла снимка.
     if (isVisualMedia && caption == null && message.replyText == null &&
-        !message.showSender && message.reactions.isEmpty()
+        !message.showSender && message.reactions.isEmpty() && message.forwardFrom == null
     ) {
         Column(
             modifier = Modifier
@@ -815,6 +841,20 @@ fun MessageBubble(
                     Spacer(Modifier.height(2.dp))
                 }
 
+                // «Переслано от …» (как в Telegram).
+                if (message.forwardFrom != null) {
+                    val fwPad = if (isText) 0.dp else 10.dp
+                    Text(
+                        "Переслано от ${message.forwardFrom}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (message.isMine) Color.White else tokens.checkCyan,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = fwPad, end = fwPad, top = if (isText) 0.dp else 6.dp),
+                    )
+                    Spacer(Modifier.height(3.dp))
+                }
+
                 if (message.replyText != null) {
                     Box(Modifier.padding(if (isText) PaddingValues(0.dp) else PaddingValues(start = 6.dp, end = 6.dp, top = 6.dp))) {
                         ReplyQuote(message.replyText, mine = message.isMine)
@@ -822,7 +862,7 @@ fun MessageBubble(
                     Spacer(Modifier.height(4.dp))
                 }
 
-                val mediaTop = if (message.showSender || message.replyText != null) 6.dp else big
+                val mediaTop = if (message.showSender || message.replyText != null || message.forwardFrom != null) 6.dp else big
                 BubbleMedia(
                     content, message.isMine, onOpenMedia,
                     mediaShape = if (isVisualMedia) RoundedCornerShape(
@@ -1449,6 +1489,8 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
                 )
             }
             if (showStickers) {
+                // Back closes the sticker panel instead of leaving the chat.
+                BackHandler { showStickers = false }
                 app.fork.messenger.media.StickerPanel(onPick = { sticker ->
                     MessageStore.sendSticker(sticker)
                 })

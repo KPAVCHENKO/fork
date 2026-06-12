@@ -31,6 +31,8 @@ data class UiMessage(
     val isEdited: Boolean = false,
     val isPinned: Boolean = false,
     val reactions: List<UiReaction> = emptyList(),
+    /** Источник пересланного сообщения («канал/имя»), иначе null. */
+    val forwardFrom: String? = null,
 )
 
 /** Статус исходящего сообщения для галочек. */
@@ -165,11 +167,47 @@ object MessageStore {
         _searchHits.value = emptyList()
         _scrollTo.value = null
         _detached.value = false
+        // Reply/edit drafts are per-open: clear them so a swipe-to-reply in one chat
+        // doesn't leak its reply bar into the next chat opened.
+        _reply.value = null
+        _editing.value = null
         val draft = ((chat?.draftMessage?.inputMessageText) as? TdApi.InputMessageText)?.text?.text
         _draftText.value = draft?.takeIf { it.isNotBlank() }
         lastSavedDraft = draft.orEmpty()
         refreshPinned(id)
-        loadMore()
+
+        // Open at the FIRST UNREAD message (like Telegram), not at the very bottom.
+        val unread = chat?.unreadCount ?: 0
+        val lastReadInbox = chat?.lastReadInboxMessageId ?: 0L
+        if (unread > 0 && lastReadInbox != 0L) {
+            openAtUnread(id, lastReadInbox)
+        } else {
+            loadMore()
+        }
+    }
+
+    /** Loads a window of history around the last-read boundary and scrolls to the
+     *  first unread message (id greater than [lastReadInbox]). */
+    private fun openAtUnread(id: Long, lastReadInbox: Long) {
+        _detached.value = true
+        _loadingHistory.value = true
+        TdClient.send(TdApi.GetChatHistory(id, lastReadInbox, -20, 40, false)) { result ->
+            _loadingHistory.value = false
+            if (synchronized(lock) { chatId } != id) return@send
+            val incoming = (result as? TdApi.Messages)?.messages.orEmpty().filterNotNull()
+            if (incoming.isEmpty()) {
+                _detached.value = false
+                loadMore()
+                return@send
+            }
+            synchronized(lock) {
+                msgs.clear()
+                msgs.addAll(incoming.sortedBy { it.id })
+            }
+            rebuild()
+            val firstUnread = synchronized(lock) { msgs.firstOrNull { it.id > lastReadInbox }?.id }
+            _scrollTo.value = firstUnread ?: synchronized(lock) { msgs.lastOrNull()?.id }
+        }
     }
 
     /** Сохраняет черновик в Telegram (пустой текст очищает черновик). */
@@ -716,7 +754,17 @@ object MessageStore {
                     val e = (r.type as? TdApi.ReactionTypeEmoji)?.emoji ?: return@mapNotNull null
                     UiReaction(e, r.totalCount, r.isChosen)
                 } ?: emptyList(),
+                forwardFrom = forwardLabel(m.forwardInfo),
             )
         }
+    }
+
+    /** Источник пересланного сообщения: «Канал», «Имя» или скрытый отправитель. */
+    private fun forwardLabel(info: TdApi.MessageForwardInfo?): String? = when (val o = info?.origin) {
+        is TdApi.MessageOriginChannel -> ChatStore.chat(o.chatId)?.title
+        is TdApi.MessageOriginChat -> ChatStore.chat(o.senderChatId)?.title
+        is TdApi.MessageOriginUser -> UserCache.firstName(o.senderUserId)
+        is TdApi.MessageOriginHiddenUser -> o.senderName
+        else -> null
     }
 }

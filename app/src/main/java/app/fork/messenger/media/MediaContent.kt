@@ -48,15 +48,20 @@ import coil.compose.AsyncImage
 import java.io.File
 import org.drinkless.tdlib.TdApi
 
-// Выбор размера фото: для пузыря — средний, для просмотрщика — самый большой.
+// Размер фото для пузыря: лучшее доступное до ~1280px (резко, но без тяжёлой
+// загрузки), для просмотрщика — самый большой по площади.
 fun TdApi.Photo.inlineSize(): TdApi.PhotoSize? =
-    sizes.firstOrNull { it.type == "x" } ?: sizes.maxByOrNull { it.width }
+    sizes.filter { it.width in 1..1280 }.maxByOrNull { it.width }
+        ?: sizes.maxByOrNull { it.width }
+        ?: sizes.firstOrNull()
 
 fun TdApi.Photo.fullSize(): TdApi.PhotoSize? =
     sizes.maxByOrNull { it.width.toLong() * it.height }
 
+// Показываем фото в его реальном соотношении сторон (как в Telegram), а не режем
+// под узкий диапазон. Клампим лишь крайности, чтобы пузырь не был гигантским.
 private fun aspect(width: Int, height: Int): Float =
-    if (width <= 0 || height <= 0) 1f else (width.toFloat() / height).coerceIn(0.65f, 1.4f)
+    if (width <= 0 || height <= 0) 1f else (width.toFloat() / height).coerceIn(0.55f, 1.9f)
 
 /** Картинка медиа: показывает мини-превью сразу, поверх — полный файл по мере загрузки. */
 @Composable
