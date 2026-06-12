@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -156,6 +157,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     var showAutoDelete by remember { mutableStateOf(false) }
     var showMuteOptions by remember { mutableStateOf(false) }
     var showBlockConfirm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     var stickerSetId by remember { mutableStateOf<Long?>(null) }
 
     // Назад: сперва закрыть клавиатуру, потом выбор/поиск, и только потом выйти из чата.
@@ -390,8 +392,19 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                         },
                                     )
                                     androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(if (MessageStore.isArchived(chatId)) "Из архива" else "В архив") },
+                                        onClick = {
+                                            topMenuOpen = false
+                                            MessageStore.archiveChat(chatId, !MessageStore.isArchived(chatId))
+                                        },
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
                                         text = { Text("Очистить историю") },
                                         onClick = { topMenuOpen = false; showClearConfirm = true },
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Удалить чат", color = MaterialTheme.colorScheme.error) },
+                                        onClick = { topMenuOpen = false; showDeleteConfirm = true },
                                     )
                                 }
                             }
@@ -631,6 +644,23 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
         }
         if (showMuteOptions) {
             MuteOptionsDialog(chatId = chatId, onDismiss = { showMuteOptions = false })
+        }
+        if (showDeleteConfirm) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Удалить чат?") },
+                text = { Text("Чат будет удалён из списка. В группах/каналах — выход из них.") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        MessageStore.deleteChat(chatId)
+                        showDeleteConfirm = false
+                        onBack()
+                    }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showDeleteConfirm = false }) { Text("Отмена") }
+                },
+            )
         }
         if (showBlockConfirm) {
             androidx.compose.material3.AlertDialog(
@@ -1797,6 +1827,10 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
     val editing by MessageStore.editing.collectAsStateWithLifecycle()
     val enterToSend by SettingsStore.enterToSend.collectAsStateWithLifecycle()
     var showPanel by remember { mutableStateOf(false) }
+    var attachMenu by remember { mutableStateOf(false) }
+    var showPoll by remember { mutableStateOf(false) }
+    var showContactPicker by remember { mutableStateOf(false) }
+    var showSchedule by remember { mutableStateOf(false) }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     // Открытие панели прячет клавиатуру — как в TG, снизу одно общее пространство.
@@ -1846,20 +1880,40 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    IconButton(
-                        onClick = {
-                            pickMedia.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+                    Box {
+                        IconButton(
+                            onClick = { attachMenu = true },
+                            modifier = Modifier.size(52.dp),
+                        ) {
+                            Icon(
+                                ForkIcons.Attach,
+                                contentDescription = "вложение",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(21.dp),
                             )
-                        },
-                        modifier = Modifier.size(52.dp),
-                    ) {
-                        Icon(
-                            ForkIcons.Attach,
-                            contentDescription = "вложение",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(21.dp),
-                        )
+                        }
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = attachMenu,
+                            onDismissRequest = { attachMenu = false },
+                        ) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Фото или видео") },
+                                onClick = {
+                                    attachMenu = false
+                                    pickMedia.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+                                    )
+                                },
+                            )
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Опрос") },
+                                onClick = { attachMenu = false; showPoll = true },
+                            )
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Контакт") },
+                                onClick = { attachMenu = false; showContactPicker = true },
+                            )
+                        }
                     }
                     Box(
                         Modifier
@@ -1942,6 +1996,7 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
                             text = ""
                         }
                     },
+                    onPickSchedule = { if (editing == null && text.isNotBlank()) showSchedule = true },
                     context = context,
                 )
             }
@@ -1957,6 +2012,149 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
             }
         }
     }
+
+    if (showPoll) {
+        PollDialog(
+            onDismiss = { showPoll = false },
+            onSend = { q, opts -> MessageStore.createPoll(q, opts); showPoll = false },
+        )
+    }
+    if (showContactPicker) {
+        ContactPickerDialog(
+            onDismiss = { showContactPicker = false },
+            onPick = { c -> MessageStore.sendContact(c); showContactPicker = false },
+        )
+    }
+    if (showSchedule) {
+        SchedulePickerDialog(
+            onDismiss = { showSchedule = false },
+            onPick = { unix ->
+                MessageStore.sendText(text, scheduleAtUnix = unix)
+                text = ""
+                showSchedule = false
+            },
+        )
+    }
+}
+
+/** Выбор даты для запланированной отправки (время — текущее +5 мин в выбранный день). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SchedulePickerDialog(onDismiss: () -> Unit, onPick: (Int) -> Unit) {
+    val dateState = androidx.compose.material3.rememberDatePickerState(
+        initialSelectedDateMillis = System.currentTimeMillis(),
+    )
+    androidx.compose.material3.DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                val millis = dateState.selectedDateMillis
+                if (millis != null) {
+                    val now = java.util.Calendar.getInstance()
+                    val cal = java.util.Calendar.getInstance().apply {
+                        timeInMillis = millis
+                        set(java.util.Calendar.HOUR_OF_DAY, now.get(java.util.Calendar.HOUR_OF_DAY))
+                        set(java.util.Calendar.MINUTE, now.get(java.util.Calendar.MINUTE) + 5)
+                    }
+                    if (cal.timeInMillis < System.currentTimeMillis()) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                    onPick((cal.timeInMillis / 1000).toInt())
+                } else {
+                    onDismiss()
+                }
+            }) { Text("Запланировать") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Отмена") }
+        },
+    ) {
+        androidx.compose.material3.DatePicker(state = dateState)
+    }
+}
+
+/** Диалог создания опроса: вопрос + 2–10 вариантов. */
+@Composable
+private fun PollDialog(onDismiss: () -> Unit, onSend: (String, List<String>) -> Unit) {
+    var question by rememberSaveable { mutableStateOf("") }
+    val options = remember { androidx.compose.runtime.mutableStateListOf("", "") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Новый опрос") },
+        text = {
+            Column {
+                androidx.compose.material3.OutlinedTextField(
+                    value = question,
+                    onValueChange = { question = it },
+                    placeholder = { Text("Вопрос") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                options.forEachIndexed { i, opt ->
+                    androidx.compose.material3.OutlinedTextField(
+                        value = opt,
+                        onValueChange = { v ->
+                            options[i] = v
+                            // авто-добавление пустого поля для следующего варианта
+                            if (i == options.lastIndex && v.isNotBlank() && options.size < 10) options.add("")
+                        },
+                        placeholder = { Text("Вариант ${i + 1}") },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        singleLine = true,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            val valid = question.isNotBlank() && options.count { it.isNotBlank() } >= 2
+            androidx.compose.material3.TextButton(
+                onClick = { onSend(question, options.toList()) },
+                enabled = valid,
+            ) { Text("Создать") }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Отмена") }
+        },
+    )
+}
+
+/** Выбор контакта для отправки. */
+@Composable
+private fun ContactPickerDialog(onDismiss: () -> Unit, onPick: (org.drinkless.tdlib.TdApi.Contact) -> Unit) {
+    LaunchedEffect(Unit) { ContactsStore.load() }
+    val contacts by ContactsStore.contacts.collectAsStateWithLifecycle()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Отправить контакт") },
+        text = {
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().height(360.dp)) {
+                items(contacts, key = { it.userId }) { c ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val u = UserCache.user(c.userId)
+                                onPick(
+                                    org.drinkless.tdlib.TdApi.Contact(
+                                        u?.phoneNumber.orEmpty(),
+                                        u?.firstName ?: c.name, u?.lastName.orEmpty(), "", c.userId,
+                                    ),
+                                )
+                            }
+                            .padding(vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        app.fork.messenger.ui.ForkAvatar(
+                            size = 40.dp, avatarPath = null, initials = c.initials, seed = c.userId,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(c.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Закрыть") }
+        },
+    )
 }
 
 /**
@@ -1971,6 +2169,7 @@ private fun SendMicButton(
     onSendSilent: () -> Unit = onSend,
     onSendScheduled: (Int) -> Unit = {},
     onSendWhenOnline: () -> Unit = {},
+    onPickSchedule: () -> Unit = {},
     context: android.content.Context,
 ) {
     val tokens = forkTokens
@@ -2087,6 +2286,10 @@ private fun SendMicButton(
                     }
                     onSendScheduled((cal.timeInMillis / 1000).toInt())
                 },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Выбрать дату…") },
+                onClick = { sendMenu = false; onPickSchedule() },
             )
         }
     }

@@ -457,6 +457,47 @@ object MessageStore {
         TdClient.send(TdApi.RecognizeSpeech(id, messageId))
     }
 
+    /** Создаёт опрос (question + 2..10 вариантов). */
+    fun createPoll(question: String, options: List<String>) {
+        val opts = options.filter { it.isNotBlank() }
+            .map { TdApi.InputPollOption(TdApi.FormattedText(it.trim(), null), null) }
+            .toTypedArray()
+        if (question.isBlank() || opts.size < 2) return
+        send(
+            TdApi.InputMessagePoll(
+                TdApi.FormattedText(question.trim(), null), opts, null, null,
+                true, false, false, false, null, false, false,
+                TdApi.InputPollTypeRegular(false), 0, 0, false,
+            ),
+        )
+    }
+
+    /** Отправляет контакт в текущий чат. */
+    fun sendContact(contact: TdApi.Contact) = send(TdApi.InputMessageContact(contact))
+
+    /** Архивирует/разархивирует чат. */
+    fun archiveChat(chatId: Long, archived: Boolean) {
+        if (chatId == 0L) return
+        TdClient.send(
+            TdApi.AddChatToList(chatId, if (archived) TdApi.ChatListArchive() else TdApi.ChatListMain()),
+        )
+    }
+
+    fun isArchived(chatId: Long): Boolean =
+        ChatStore.chat(chatId)?.positions?.any { it.list is TdApi.ChatListArchive } == true
+
+    /** Удаляет/покидает чат. */
+    fun deleteChat(chatId: Long) {
+        if (chatId == 0L) return
+        val type = ChatStore.chat(chatId)?.type
+        if (type is TdApi.ChatTypeSupergroup || type is TdApi.ChatTypeBasicGroup) {
+            TdClient.send(TdApi.LeaveChat(chatId))
+        } else {
+            TdClient.send(TdApi.DeleteChat(chatId))
+        }
+    }
+
+
     /**
      * Marks messages up to [messageId] as read (forceRead), as the user scrolls them
      * into view. This is what clears the unread counter — opening at the unread anchor

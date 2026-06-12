@@ -14,6 +14,20 @@ object StickerStore {
     private val _sections = MutableStateFlow<List<StickerSection>>(emptyList())
     val sections: StateFlow<List<StickerSection>> = _sections.asStateFlow()
 
+    /** Результаты поиска стикеров по эмодзи. */
+    private val _searchResults = MutableStateFlow<List<TdApi.Sticker>>(emptyList())
+    val searchResults: StateFlow<List<TdApi.Sticker>> = _searchResults.asStateFlow()
+
+    fun search(query: String) {
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            return
+        }
+        TdClient.send(TdApi.SearchStickers(TdApi.StickerTypeRegular(), query, "", null, 0, 50)) { res ->
+            if (res is TdApi.Stickers) _searchResults.value = res.stickers.filterNotNull()
+        }
+    }
+
     @Volatile
     private var loaded = false
 

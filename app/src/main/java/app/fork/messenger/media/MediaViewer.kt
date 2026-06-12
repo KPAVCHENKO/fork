@@ -2,12 +2,14 @@ package app.fork.messenger.media
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,25 +80,57 @@ fun MediaViewer(targets: List<MediaTarget>, startIndex: Int, onClose: () -> Unit
     // Когда текущее фото увеличено — отключаем листание, чтобы свайп двигал фото.
     var zoomed by remember { mutableStateOf(false) }
 
+    val dragY = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    // Фон гаснет по мере свайпа вниз — проявляется чат за просмотрщиком (как в TG).
+    val bgAlpha = (1f - kotlin.math.abs(dragY.value) / 900f).coerceIn(0f, 1f)
+
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(Color.Black.copy(alpha = bgAlpha)),
         contentAlignment = Alignment.Center,
     ) {
-        androidx.compose.foundation.pager.HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize(),
-            pageSpacing = 16.dp,
-            userScrollEnabled = !zoomed,
-        ) { page ->
-            val isCurrent = page == pagerState.currentPage
-            when (val t = targets[page]) {
-                is MediaTarget.Photo -> PhotoViewer(
-                    t.photo,
-                    onZoomChange = { if (isCurrent) zoomed = it },
-                )
-                is MediaTarget.Video -> VideoViewer(t.video)
+        // Свайп ВНИЗ закрывает: медиа уезжает за пальцем и уменьшается. Активен только на
+        // обычном масштабе (когда увеличено — вертикальный жест двигает фото).
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(zoomed) {
+                    if (zoomed) return@pointerInput
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            if (kotlin.math.abs(dragY.value) > 320f) onClose()
+                            else scope.launch { dragY.animateTo(0f) }
+                        },
+                        onDragCancel = { scope.launch { dragY.animateTo(0f) } },
+                    ) { change, dy ->
+                        change.consume()
+                        scope.launch { dragY.snapTo(dragY.value + dy) }
+                    }
+                }
+                .graphicsLayer {
+                    translationY = dragY.value
+                    val s = (1f - kotlin.math.abs(dragY.value) / 2600f).coerceIn(0.85f, 1f)
+                    scaleX = s
+                    scaleY = s
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.foundation.pager.HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                pageSpacing = 16.dp,
+                userScrollEnabled = !zoomed,
+            ) { page ->
+                val isCurrent = page == pagerState.currentPage
+                when (val t = targets[page]) {
+                    is MediaTarget.Photo -> PhotoViewer(
+                        t.photo,
+                        onZoomChange = { if (isCurrent) zoomed = it },
+                    )
+                    is MediaTarget.Video -> VideoViewer(t.video)
+                }
             }
         }
 

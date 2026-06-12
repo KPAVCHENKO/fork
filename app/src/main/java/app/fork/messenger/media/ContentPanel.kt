@@ -2,6 +2,8 @@ package app.fork.messenger.media
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -68,10 +70,72 @@ fun ContentPanel(
             when (tab) {
                 ContentTab.EMOJI -> EmojiGrid(onEmoji)
                 ContentTab.GIF -> GifGrid(onGif)
-                ContentTab.STICKERS -> StickerGrid(onSticker)
+                ContentTab.STICKERS -> StickerTab(onSticker)
             }
         }
         BottomTabs(tab, onTab = { tab = it; lastContentTab = it }, onBackspace = onBackspace)
+    }
+}
+
+/** Вкладка стикеров: поиск по эмодзи сверху + сетка (наборы или результаты поиска). */
+@Composable
+private fun StickerTab(onSticker: (TdApi.Sticker) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val results by StickerStore.searchResults.collectAsStateWithLifecycle()
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .height(38.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                ForkIcons.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.weight(1f)) {
+                if (query.isEmpty()) {
+                    Text(
+                        "Поиск по эмодзи 😀",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    )
+                }
+                androidx.compose.foundation.text.BasicTextField(
+                    value = query,
+                    onValueChange = { query = it; StickerStore.search(it) },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        if (query.isBlank()) {
+            StickerGrid(onSticker)
+        } else {
+            LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.fillMaxSize()) {
+                items(results) { st ->
+                    Box(
+                        Modifier
+                            .height(80.dp)
+                            .clickable { onSticker(st) }
+                            .padding(6.dp),
+                    ) {
+                        StickerThumb(st, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        }
     }
 }
 
