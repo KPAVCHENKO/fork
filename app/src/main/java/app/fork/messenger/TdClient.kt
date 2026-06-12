@@ -78,12 +78,20 @@ object TdClient {
 
     /** Wall-clock at process start, for per-phase connection timing logs. */
     @Volatile private var connectStartMs = 0L
+    @Volatile private var channelRefreshed = false
 
     @Synchronized
     fun start(context: Context) {
         if (client != null) return
         appContext = context.applicationContext
         connectStartMs = System.currentTimeMillis()
+
+        // CRITICAL perf fix: TDLib defaults to a very chatty verbosity and writes
+        // EVERY internal event to Android's log (tag DLTD). Measured on-device at
+        // ~21,000 lines/sec (levels 3-4) — native string formatting + JNI + the
+        // logcat pipe per line is a serious CPU/IO drain on weak phones, slowing both
+        // cold-connect and scrolling. Drop to level 1 (errors/warnings only).
+        runCatching { Client.execute(TdApi.SetLogVerbosityLevel(1)) }
 
         Client.setLogMessageHandler(1) { verbosityLevel, message ->
             Log.e("TDLib", "[$verbosityLevel] $message")
@@ -209,9 +217,15 @@ object TdClient {
                 _authState.value = AuthUiState.Ready
                 ChatStore.loadChats()
                 ChatStore.loadArchive()
-                // Пополняем пул прокси свежими рабочими из публичного канала.
-                if (::appContext.isInitialized) {
-                    app.fork.messenger.net.ProxyPool.refreshFromChannel(appContext)
+                // Refresh the proxy pool from the public channel, but LATER: doing it
+                // immediately stormed dozens of TLS handshakes (TestProxy) that competed
+                // with the initial chat sync. Defer 90s and run once.
+                if (::appContext.isInitialized && !channelRefreshed) {
+                    channelRefreshed = true
+                    watchdogScope.launch {
+                        kotlinx.coroutines.delay(90_000)
+                        app.fork.messenger.net.ProxyPool.refreshFromChannel(appContext)
+                    }
                 }
                 // Подписка на пуши: дальше сервер Telegram будит нас через Firebase.
                 runCatching {

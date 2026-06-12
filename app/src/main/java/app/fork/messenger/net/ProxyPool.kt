@@ -158,10 +158,11 @@ object ProxyPool {
                 }
                 TdClient.send(TdApi.CloseChat(chat.id))
                 if (parsed.isEmpty()) return@send
-                // Проверяем каждый и сохраняем прошедшие тест.
+                // Test a bounded number (not dozens at once — that stormed TLS handshakes).
+                val toTest = parsed.take(MAX_TESTED)
                 val good = java.util.Collections.synchronizedList(mutableListOf<Candidate>())
-                var pending = parsed.size
-                parsed.forEach { cand ->
+                var pending = toTest.size
+                toTest.forEach { cand ->
                     TdClient.send(TdApi.TestProxy(proxyOf(cand), TEST_DC, TEST_TIMEOUT)) { res ->
                         pending--
                         if (res is TdApi.Ok) good += cand
