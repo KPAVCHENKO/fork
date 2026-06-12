@@ -70,7 +70,7 @@ fun StickerGrid(onPick: (TdApi.Sticker) -> Unit) {
                     )
                     is PanelItem.Cell -> Box(
                         Modifier
-                            .height(80.dp)
+                            .height(96.dp)
                             .clickable { onPick(item.sticker) }
                             .padding(6.dp),
                     ) {

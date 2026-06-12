@@ -1798,6 +1798,30 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
             }
         }
     }
+    // Файл-документ.
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) mediaScope.launch {
+            val f = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { copyDocument(context, uri) }
+            f?.let { MessageStore.sendDocument(it.absolutePath) }
+        }
+    }
+    // Лента галереи в панели вложений (требует медиа-разрешения).
+    var recentMedia by remember { mutableStateOf<List<android.net.Uri>>(emptyList()) }
+    fun refreshRecentMedia() {
+        mediaScope.launch {
+            recentMedia = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                queryRecentMedia(context, 30)
+            }
+        }
+    }
+    val mediaPerm = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { res -> if (res.values.any { it }) refreshRecentMedia() }
+    val locationPerm = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) lastKnownLocation(context)?.let { (lat, lon) -> MessageStore.sendLocation(lat, lon) }
+    }
 
     pendingAlbum?.let { album ->
         AlbumPreviewDialog(
@@ -1837,6 +1861,22 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
     val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     // Открытие панели прячет клавиатуру — как в TG, снизу одно общее пространство.
     LaunchedEffect(showPanel) { if (showPanel) keyboard?.hide() }
+    // Открытие панели вложений: прячем клавиатуру (чтобы лист не «прыгал») и грузим ленту галереи.
+    LaunchedEffect(attachMenu) {
+        if (attachMenu) {
+            keyboard?.hide()
+            val perms = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VIDEO)
+            } else {
+                arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
+            val granted = perms.all {
+                androidx.core.content.ContextCompat.checkSelfPermission(context, it) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            }
+            if (granted) refreshRecentMedia() else mediaPerm.launch(perms)
+        }
+    }
 
     // Вход в режим редактирования — подставляем текст сообщения в поле.
     LaunchedEffect(editing) {
@@ -1993,12 +2033,39 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
 
     if (attachMenu) {
         AttachSheet(
+            recent = recentMedia,
             onDismiss = { attachMenu = false },
-            onPhoto = {
+            onPickRecent = { uri ->
+                attachMenu = false
+                mediaScope.launch {
+                    val m = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        buildPendingMedia(context, uri)
+                    }
+                    if (m != null) pendingMedia = m
+                }
+            },
+            onGallery = {
                 attachMenu = false
                 pickMedia.launch(
                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
                 )
+            },
+            onFile = { attachMenu = false; pickFile.launch("*/*") },
+            onLocation = {
+                attachMenu = false
+                val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                    context, android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        context, android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (granted) {
+                    val loc = lastKnownLocation(context)
+                    if (loc != null) MessageStore.sendLocation(loc.first, loc.second)
+                    else android.widget.Toast.makeText(context, "Геопозиция недоступна", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    locationPerm.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                }
             },
             onPoll = { attachMenu = false; showPoll = true },
             onContact = { attachMenu = false; showContactPicker = true },
@@ -2062,21 +2129,51 @@ private fun SchedulePickerDialog(onDismiss: () -> Unit, onPick: (Int) -> Unit) {
     }
 }
 
-/** Лист вложений (как в TG): фото/видео первым, ниже — опрос, контакт. Стеклянные круглые кнопки. */
+/**
+ * Лист вложений как в TG: сверху живая лента галереи (тап по фото → предпросмотр и отправка),
+ * ниже — ряд стеклянных круглых кнопок: Галерея, Файл, Геопозиция, Опрос, Контакт.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AttachSheet(
+    recent: List<android.net.Uri>,
     onDismiss: () -> Unit,
-    onPhoto: () -> Unit,
+    onPickRecent: (android.net.Uri) -> Unit,
+    onGallery: () -> Unit,
+    onFile: () -> Unit,
+    onLocation: () -> Unit,
     onPoll: () -> Unit,
     onContact: () -> Unit,
 ) {
     androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        if (recent.isNotEmpty()) {
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(recent, key = { it.toString() }) { uri ->
+                    coil.compose.AsyncImage(
+                        model = uri,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier
+                            .size(108.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            .clickable { onPickRecent(uri) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+        }
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            GlassAttachButton(ForkIcons.Image, "Фото и видео", onPhoto)
+            GlassAttachButton(ForkIcons.Image, "Галерея", onGallery)
+            GlassAttachButton(ForkIcons.File, "Файл", onFile)
+            GlassAttachButton(ForkIcons.Location, "Геопозиция", onLocation)
             GlassAttachButton(ForkIcons.Poll, "Опрос", onPoll)
             GlassAttachButton(ForkIcons.Person, "Контакт", onContact)
         }
@@ -2091,20 +2188,29 @@ private fun GlassAttachButton(
     label: String,
     onClick: () -> Unit,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(64.dp),
+    ) {
         Box(
             Modifier
-                .size(62.dp)
+                .size(54.dp)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f))
                 .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), CircleShape)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(26.dp))
+            Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(6.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }
 

@@ -475,6 +475,14 @@ object MessageStore {
     /** Отправляет контакт в текущий чат. */
     fun sendContact(contact: TdApi.Contact) = send(TdApi.InputMessageContact(contact))
 
+    /** Отправляет файл-документ. */
+    fun sendDocument(path: String) =
+        send(TdApi.InputMessageDocument(TdApi.InputFileLocal(path), null, false, null))
+
+    /** Отправляет геопозицию. */
+    fun sendLocation(latitude: Double, longitude: Double) =
+        send(TdApi.InputMessageLocation(TdApi.Location(latitude, longitude, 0.0), 0, 0, 0))
+
     /** Архивирует/разархивирует чат. */
     fun archiveChat(chatId: Long, archived: Boolean) {
         if (chatId == 0L) return

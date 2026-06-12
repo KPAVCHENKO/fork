@@ -27,7 +27,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,6 +53,8 @@ private enum class ContentTab { EMOJI, GIF, STICKERS }
 /** Запоминает последнюю открытую вкладку панели между открытиями (как в TG). */
 private var lastContentTab = ContentTab.STICKERS
 
+private val CONTENT_TABS = listOf(ContentTab.EMOJI, ContentTab.GIF, ContentTab.STICKERS)
+
 @Composable
 fun ContentPanel(
     onSticker: (TdApi.Sticker) -> Unit,
@@ -58,22 +62,33 @@ fun ContentPanel(
     onEmoji: (String) -> Unit,
     onBackspace: () -> Unit,
 ) {
-    var tab by remember { mutableStateOf(lastContentTab) }
+    // Свайпом листаем между Эмодзи / GIF / Стикерами (как в TG); тап по вкладке — тоже листает.
+    val initial = CONTENT_TABS.indexOf(lastContentTab).coerceAtLeast(0)
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initial) { CONTENT_TABS.size }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(pagerState.currentPage) { lastContentTab = CONTENT_TABS[pagerState.currentPage] }
 
     Column(
         Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(360.dp)
             .background(MaterialTheme.colorScheme.surface),
     ) {
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when (tab) {
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+        ) { page ->
+            when (CONTENT_TABS[page]) {
                 ContentTab.EMOJI -> EmojiGrid(onEmoji)
                 ContentTab.GIF -> GifGrid(onGif)
                 ContentTab.STICKERS -> StickerTab(onSticker)
             }
         }
-        BottomTabs(tab, onTab = { tab = it; lastContentTab = it }, onBackspace = onBackspace)
+        BottomTabs(
+            tab = CONTENT_TABS[pagerState.currentPage],
+            onTab = { t -> scope.launch { pagerState.animateScrollToPage(CONTENT_TABS.indexOf(t)) } },
+            onBackspace = onBackspace,
+        )
     }
 }
 
@@ -127,7 +142,7 @@ private fun StickerTab(onSticker: (TdApi.Sticker) -> Unit) {
                 items(results) { st ->
                     Box(
                         Modifier
-                            .height(80.dp)
+                            .height(96.dp)
                             .clickable { onSticker(st) }
                             .padding(6.dp),
                     ) {
