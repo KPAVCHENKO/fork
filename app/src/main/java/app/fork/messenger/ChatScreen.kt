@@ -226,6 +226,18 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
             }
     }
 
+    // Помечаем прочитанным самое новое видимое сообщение (как в Telegram): по мере
+    // прокрутки вниз непрочитанные исчезают, и счётчик в списке чатов очищается.
+    LaunchedEffect(listState, chatId) {
+        snapshotFlow { listState.firstVisibleItemIndex }
+            .distinctUntilChanged()
+            .collect { idx ->
+                val list = MessageStore.messages.value
+                // reverseLayout: нижнее видимое = list[size-1-idx].
+                list.getOrNull(list.size - 1 - idx)?.let { MessageStore.markViewed(it.id) }
+            }
+    }
+
     Box(Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
@@ -424,9 +436,9 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                     else selection.add(message.id)
                                 },
                                 onOpenStickerSet = { stickerSetId = it },
-                                // During a fling, hold the current sticker frame (smooth
-                                // scroll); resume animating the instant the list settles.
-                                animateStickers = !isScrolling,
+                                // Always animate (like Telegram) — frame updates are
+                                // draw-phase only, so they don't block scrolling.
+                                animateStickers = true,
                             )
                         }
                     }
@@ -821,7 +833,12 @@ fun MessageBubble(
         ) {
             Column(
                 Modifier
-                    .widthIn(max = 300.dp)
+                    // Для медиа/альбома фиксируем ширину пузыря по ширине фото (252dp),
+                    // чтобы текст переносился по краю фото и сбоку не торчал фон пузыря.
+                    .then(
+                        if (isVisualMedia || message.albumMedia.isNotEmpty()) Modifier.width(252.dp)
+                        else Modifier.widthIn(max = 300.dp),
+                    )
                     .padding(
                         when {
                             isText -> PaddingValues(horizontal = 13.dp, vertical = 8.dp)

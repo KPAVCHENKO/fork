@@ -363,6 +363,17 @@ object MessageStore {
 
     fun isViewing(id: Long): Boolean = synchronized(lock) { chatId == id }
 
+    /**
+     * Marks messages up to [messageId] as read (forceRead), as the user scrolls them
+     * into view. This is what clears the unread counter — opening at the unread anchor
+     * no longer leaves the chat unread once you scroll through it.
+     */
+    fun markViewed(messageId: Long) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L || messageId == 0L) return
+        TdClient.send(TdApi.ViewMessages(id, longArrayOf(messageId), null, true))
+    }
+
     /** Пересобирает шапку чата (заголовок, статус, аватар, право писать). */
     fun rebuildHeader() {
         val id = synchronized(lock) { chatId }

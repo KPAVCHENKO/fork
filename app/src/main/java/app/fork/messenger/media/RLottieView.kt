@@ -57,8 +57,11 @@ fun RLottieView(
             if (ptr == 0L) return@launch
             try {
                 val count = RLottie.nativeFrameCount(ptr).coerceAtLeast(1)
-                val fps = RLottie.nativeFrameRate(ptr).takeIf { it > 0 } ?: 60.0
-                val frameDelay = (1000.0 / fps).toLong().coerceAtLeast(16)
+                val nativeFps = RLottie.nativeFrameRate(ptr).takeIf { it > 0 } ?: 60.0
+                // Render at ~30fps regardless of the sticker's native rate (most TGS are
+                // 60fps); skip frames to keep correct speed at half the CPU cost.
+                val step = (nativeFps / 30.0).toInt().coerceAtLeast(1)
+                val frameDelay = (1000.0 * step / nativeFps).toLong().coerceAtLeast(20)
                 var f = 0
                 var idx = 0
                 var renderedFrame = -1
@@ -72,11 +75,10 @@ fun RLottieView(
                         renderedFrame = f
                     }
                     if (playing) {
-                        f = (f + 1) % count
+                        f = (f + step) % count
                         delay(frameDelay)
                     } else {
-                        // Paused (scrolling): hold the current frame cheaply.
-                        delay(120)
+                        delay(120) // paused: hold current frame cheaply
                     }
                 }
             } finally {
