@@ -19,24 +19,33 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-private val rlottieScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+// Bounded render pool: cap concurrent native renders so animated stickers never
+// monopolise the CPU and steal frames from scrolling. 2 threads handle a screenful
+// of stickers fine (each render is a few ms and the loops mostly idle on delay()).
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+private val rlottieDispatcher = Dispatchers.Default.limitedParallelism(2)
+private val rlottieScope = CoroutineScope(SupervisorJob() + rlottieDispatcher)
 
 /**
- * Renders a TGS sticker via the native rlottie engine (Telegram's renderer).
+ * Renders a TGS sticker via native rlottie (Telegram's engine). Frames are
+ * rasterized on a bounded background pool into double-buffered bitmaps and blitted
+ * by the UI thread.
  *
- * Frames are rasterized on a background thread into double-buffered bitmaps and
- * published to Compose as an ImageBitmap — the UI thread only blits, so many
- * stickers animate smoothly even on weak devices. [rawJson] is the un-gzipped
- * Lottie JSON; [play] gates the animation (paused = last frame stays shown).
+ * [play] controls animation: when false the LAST rendered frame is held (not swapped
+ * to a thumbnail), so fast scrolling stays smooth with no flicker and the sticker
+ * resumes instantly when the list settles.
  */
 @Composable
 fun RLottieView(
     rawJson: String,
     modifier: Modifier = Modifier,
     play: Boolean = true,
-    renderPx: Int = 320,
+    renderPx: Int = 256,
 ) {
     var frame by remember(rawJson) { mutableStateOf<ImageBitmap?>(null) }
+    // Read latest play without restarting the render loop on every scroll toggle.
+    val playState = remember(rawJson) { mutableStateOf(play) }
+    playState.value = play
 
     DisposableEffect(rawJson, renderPx) {
         val buffers = arrayOf(
@@ -52,17 +61,22 @@ fun RLottieView(
                 val frameDelay = (1000.0 / fps).toLong().coerceAtLeast(16)
                 var f = 0
                 var idx = 0
-                // Render at least the first frame even when paused, so it isn't blank.
+                var renderedFrame = -1
                 while (isActive) {
-                    val target = buffers[idx]
-                    RLottie.nativeRender(ptr, f, target, renderPx, renderPx)
-                    frame = target.asImageBitmap()
-                    idx = 1 - idx
-                    if (play) {
+                    val playing = playState.value
+                    if (playing || renderedFrame != f) {
+                        val target = buffers[idx]
+                        RLottie.nativeRender(ptr, f, target, renderPx, renderPx)
+                        frame = target.asImageBitmap()
+                        idx = 1 - idx
+                        renderedFrame = f
+                    }
+                    if (playing) {
                         f = (f + 1) % count
                         delay(frameDelay)
                     } else {
-                        delay(120) // idle: cheap poll until play resumes
+                        // Paused (scrolling): hold the current frame cheaply.
+                        delay(120)
                     }
                 }
             } finally {

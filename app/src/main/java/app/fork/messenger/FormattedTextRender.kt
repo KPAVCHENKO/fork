@@ -1,5 +1,6 @@
 package app.fork.messenger
 
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -12,10 +13,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import org.drinkless.tdlib.TdApi
 
+/** Prefix for inline custom-emoji placeholders in the inlineContent map. */
+const val CUSTOM_EMOJI_PREFIX = "ce_"
+
+/** Custom/premium emoji ids referenced by this text (for building inlineContent). */
+fun TdApi.FormattedText.customEmojiIds(): List<Long> =
+    entities.orEmpty().mapNotNull { (it.type as? TdApi.TextEntityTypeCustomEmoji)?.customEmojiId }
+
 /**
  * Превращает FormattedText TDLib в AnnotatedString: жирный/курсив/подчёркнутый/
- * зачёркнутый/моноширинный/цитаты, кликабельные ссылки и спойлеры
- * (скрыты заливкой, тап раскрывает все спойлеры сообщения).
+ * зачёркнутый/моноширинный/цитаты, кликабельные ссылки, спойлеры и ВСТРОЕННЫЕ
+ * кастом/премиум-эмодзи (заменяются inline-плейсхолдерами "ce_<id>").
  *
  * Смещения entities TDLib — в UTF-16, как и индексы Kotlin-строк.
  */
@@ -26,11 +34,40 @@ fun TdApi.FormattedText.toAnnotated(
     spoilersRevealed: Boolean,
     onRevealSpoilers: () -> Unit,
 ): AnnotatedString = buildAnnotatedString {
-    append(text)
     val length = text.length
+    // Custom-emoji ranges replace their text with one inline placeholder each.
+    val custom = entities.orEmpty().mapNotNull { e ->
+        val t = e.type as? TdApi.TextEntityTypeCustomEmoji ?: return@mapNotNull null
+        val s = e.offset.coerceIn(0, length)
+        val en = (e.offset + e.length).coerceIn(s, length)
+        if (s < en) Triple(s, en, t.customEmojiId) else null
+    }.sortedBy { it.first }
+
+    var pos = 0
+    for ((s, en, id) in custom) {
+        if (s > pos) append(text.substring(pos, s))
+        appendInlineContent("$CUSTOM_EMOJI_PREFIX$id", text.substring(s, en))
+        pos = en
+    }
+    if (pos < length) append(text.substring(pos))
+
+    // Maps an original text offset to the built-string offset (inline placeholders
+    // collapse each custom range to a single char).
+    fun mapOff(orig: Int): Int {
+        var shift = 0
+        for ((s, en, _) in custom) {
+            when {
+                en <= orig -> shift += (en - s) - 1
+                s < orig -> return s - shift
+            }
+        }
+        return orig - shift
+    }
+
     entities?.forEach { entity ->
-        val start = entity.offset.coerceIn(0, length)
-        val end = (entity.offset + entity.length).coerceIn(start, length)
+        if (entity.type is TdApi.TextEntityTypeCustomEmoji) return@forEach
+        val start = mapOff(entity.offset.coerceIn(0, length))
+        val end = mapOff((entity.offset + entity.length).coerceIn(0, length))
         if (start >= end) return@forEach
         when (val type = entity.type) {
             is TdApi.TextEntityTypeBold ->
@@ -64,15 +101,19 @@ fun TdApi.FormattedText.toAnnotated(
                 start, end,
             )
 
-            is TdApi.TextEntityTypeUrl -> addLink(
-                LinkAnnotation.Url(
-                    text.substring(start, end),
-                    TextLinkStyles(
-                        SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline),
+            is TdApi.TextEntityTypeUrl -> {
+                val os = entity.offset.coerceIn(0, length)
+                val oe = (entity.offset + entity.length).coerceIn(os, length)
+                addLink(
+                    LinkAnnotation.Url(
+                        text.substring(os, oe),
+                        TextLinkStyles(
+                            SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline),
+                        ),
                     ),
-                ),
-                start, end,
-            )
+                    start, end,
+                )
+            }
 
             is TdApi.TextEntityTypeMention, is TdApi.TextEntityTypeMentionName,
             is TdApi.TextEntityTypeHashtag, is TdApi.TextEntityTypeCashtag,

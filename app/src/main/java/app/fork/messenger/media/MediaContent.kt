@@ -128,6 +128,32 @@ fun PhotoContent(photo: TdApi.Photo, shape: androidx.compose.ui.graphics.Shape? 
     )
 }
 
+/** Квадратная ячейка медиа для сетки альбома: мини-превью сразу, полный — по мере загрузки. */
+@Composable
+fun MediaSquare(file: TdApi.File, mini: TdApi.Minithumbnail?, onClick: () -> Unit) {
+    val state = rememberFileState(file, autoDownload = true, priority = 22)
+    val miniBmp = rememberMiniThumb(mini)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick),
+    ) {
+        miniBmp?.let {
+            androidx.compose.foundation.Image(
+                bitmap = it, contentDescription = null,
+                contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize(),
+            )
+        }
+        state.path?.let {
+            AsyncImage(
+                model = File(it), contentDescription = null,
+                contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize(),
+            )
+        }
+    }
+}
+
 @Composable
 fun VideoContent(video: TdApi.Video, shape: androidx.compose.ui.graphics.Shape? = null, onOpen: () -> Unit) {
     Box(contentAlignment = Alignment.Center) {

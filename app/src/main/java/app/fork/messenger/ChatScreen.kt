@@ -23,6 +23,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -85,6 +86,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.fork.messenger.media.AnimationContent
@@ -93,6 +95,7 @@ import app.fork.messenger.media.MediaSend
 import app.fork.messenger.media.MediaTarget
 import app.fork.messenger.media.MediaViewer
 import app.fork.messenger.media.PhotoContent
+import app.fork.messenger.media.inlineSize
 import app.fork.messenger.media.StickerContent
 import app.fork.messenger.media.VideoContent
 import app.fork.messenger.media.VoiceContent
@@ -421,9 +424,9 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                     else selection.add(message.id)
                                 },
                                 onOpenStickerSet = { stickerSetId = it },
-                                // rlottie is cheap enough to animate every visible
-                                // sticker (LazyColumn only composes on-screen items).
-                                animateStickers = true,
+                                // During a fling, hold the current sticker frame (smooth
+                                // scroll); resume animating the instant the list settles.
+                                animateStickers = !isScrolling,
                             )
                         }
                     }
@@ -771,7 +774,8 @@ fun MessageBubble(
     // «Голое» медиа без подписи/ответа/имени — чистое фото без пузыря (как в Telegram),
     // время — капсулой поверх угла снимка.
     if (isVisualMedia && caption == null && message.replyText == null &&
-        !message.showSender && message.reactions.isEmpty() && message.forwardFrom == null
+        !message.showSender && message.reactions.isEmpty() && message.forwardFrom == null &&
+        message.albumMedia.isEmpty()
     ) {
         Column(
             modifier = Modifier
@@ -862,14 +866,18 @@ fun MessageBubble(
                     Spacer(Modifier.height(4.dp))
                 }
 
-                val mediaTop = if (message.showSender || message.replyText != null || message.forwardFrom != null) 6.dp else big
-                BubbleMedia(
-                    content, message.isMine, onOpenMedia,
-                    mediaShape = if (isVisualMedia) RoundedCornerShape(
-                        topStart = mediaTop, topEnd = mediaTop, bottomStart = 4.dp, bottomEnd = 4.dp,
-                    ) else null,
-                    messageId = message.id,
-                )
+                if (message.albumMedia.isNotEmpty()) {
+                    Box(Modifier.padding(4.dp)) { AlbumGrid(message.albumMedia, onOpenMedia) }
+                } else {
+                    val mediaTop = if (message.showSender || message.replyText != null || message.forwardFrom != null) 6.dp else big
+                    BubbleMedia(
+                        content, message.isMine, onOpenMedia,
+                        mediaShape = if (isVisualMedia) RoundedCornerShape(
+                            topStart = mediaTop, topEnd = mediaTop, bottomStart = 4.dp, bottomEnd = 4.dp,
+                        ) else null,
+                        messageId = message.id,
+                    )
+                }
 
                 // Форматирование TDLib (жирный/курсив/код/ссылки/спойлеры).
                 var spoilersRevealed by remember(message.id) { mutableStateOf(false) }
@@ -896,6 +904,24 @@ fun MessageBubble(
                     ) ?: androidx.compose.ui.text.AnnotatedString(if (caption != null) caption else message.text)
                 }
 
+                // Inline-контент для кастом/премиум-эмодзи: подставляем стикеры,
+                // когда они загрузились; до этого показывается обычный эмодзи-фолбэк.
+                val emojiIds = remember(content) { formatted?.customEmojiIds()?.distinct().orEmpty() }
+                val emojiVersion by CustomEmojiStore.version.collectAsStateWithLifecycle()
+                val inlineEmoji = remember(emojiIds, emojiVersion) {
+                    emojiIds.mapNotNull { id ->
+                        val st = CustomEmojiStore.sticker(id) ?: return@mapNotNull null
+                        "$CUSTOM_EMOJI_PREFIX$id" to androidx.compose.foundation.text.InlineTextContent(
+                            androidx.compose.ui.text.Placeholder(
+                                width = 1.25.em, height = 1.25.em,
+                                placeholderVerticalAlign = androidx.compose.ui.text.PlaceholderVerticalAlign.Center,
+                            ),
+                        ) {
+                            app.fork.messenger.media.StickerThumb(st, Modifier.fillMaxSize())
+                        }
+                    }.toMap()
+                }
+
                 BubbleText(
                     text = annotated,
                     time = message.time,
@@ -903,6 +929,7 @@ fun MessageBubble(
                     mine = message.isMine,
                     hasMediaAbove = !isText,
                     showText = isText || caption != null,
+                    inlineContent = inlineEmoji,
                 )
 
                 // Превью ссылки (как в Telegram): сайт, заголовок, описание, картинка.
@@ -1097,6 +1124,54 @@ private fun LinkPreviewCard(
     }
 }
 
+/** Сетка альбома (несколько фото/видео одним постом) — 2 колонки, квадратные ячейки. */
+@Composable
+private fun AlbumGrid(items: List<AlbumItem>, onOpenMedia: (MediaTarget) -> Unit) {
+    Column(
+        Modifier
+            .widthIn(max = 250.dp)
+            .clip(RoundedCornerShape(forkTokens.bubbleRadius - 3.dp)),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        items.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                row.forEach { item ->
+                    Box(Modifier.weight(1f).aspectRatio(1f)) { AlbumCell(item, onOpenMedia) }
+                }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumCell(item: AlbumItem, onOpenMedia: (MediaTarget) -> Unit) {
+    when (val c = item.content) {
+        is TdApi.MessagePhoto -> {
+            val size = c.photo.inlineSize() ?: return
+            app.fork.messenger.media.MediaSquare(size.photo, c.photo.minithumbnail) {
+                onOpenMedia(MediaTarget.Photo(c.photo))
+            }
+        }
+        is TdApi.MessageVideo -> {
+            Box(contentAlignment = Alignment.Center) {
+                c.video.thumbnail?.file?.let { thumb ->
+                    app.fork.messenger.media.MediaSquare(thumb, c.video.minithumbnail) {
+                        onOpenMedia(MediaTarget.Video(c.video))
+                    }
+                }
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(Color(0x8C0E1424)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(ForkIcons.Play, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                }
+            }
+        }
+        else -> Unit
+    }
+}
+
 /** Картиночная/медийная часть пузыря (если есть). */
 @Composable
 private fun BubbleMedia(
@@ -1237,6 +1312,7 @@ private fun BubbleText(
     mine: Boolean,
     hasMediaAbove: Boolean,
     showText: Boolean,
+    inlineContent: Map<String, androidx.compose.foundation.text.InlineTextContent> = emptyMap(),
 ) {
     if (!showText) {
         Row(
@@ -1259,6 +1335,7 @@ private fun BubbleText(
             text = text,
             style = MessageTextStyle,
             color = if (mine) Color.White else forkTokens.bubbleTextIn,
+            inlineContent = inlineContent,
             modifier = Modifier.weight(1f, fill = false),
         )
         Spacer(Modifier.padding(start = 8.dp))

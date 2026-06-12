@@ -73,23 +73,25 @@ fun StickerThumb(sticker: TdApi.Sticker, modifier: Modifier = Modifier) {
 
 @Composable
 fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boolean = true) {
-    // Static thumbnail base — shown immediately and whenever animation is paused.
+    val isTgs = sticker.format is TdApi.StickerFormatTgs && RLottie.available
+    val isWebm = sticker.format is TdApi.StickerFormatWebm
+
+    // Static thumbnail base — always under the animation (same box/scale), so the
+    // sticker is never blank while the engine warms up.
     val thumb = sticker.thumbnail?.file
     val thumbPath = if (thumb != null) rememberFileState(thumb, true, 20).path else null
-
-    // Full asset only auto-downloads when we actually intend to animate it.
-    val state = rememberFileState(sticker.sticker, autoDownload = play, priority = 24)
+    val state = rememberFileState(sticker.sticker, autoDownload = true, priority = 24)
     val path = state.path
 
-    // Claim a concurrency slot only while this sticker is allowed to animate and
-    // its file is ready. Released on dispose / when play turns false.
+    // Concurrency slot only for heavy WEBM (ExoPlayer). rlottie is bounded by its
+    // own render pool, so TGS doesn't need a slot.
     var hasSlot by remember { mutableStateOf(false) }
-    DisposableEffect(play, path) {
-        if (play && path != null && !hasSlot) {
-            if (activeAnimations.get() < MAX_CONCURRENT_ANIMATIONS) {
-                activeAnimations.incrementAndGet()
-                hasSlot = true
-            }
+    DisposableEffect(isWebm, play, path) {
+        if (isWebm && play && path != null && !hasSlot &&
+            activeAnimations.get() < MAX_CONCURRENT_ANIMATIONS
+        ) {
+            activeAnimations.incrementAndGet()
+            hasSlot = true
         }
         onDispose {
             if (hasSlot) {
@@ -99,14 +101,8 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
         }
     }
 
-    val animating = play && path != null && hasSlot
     Box(modifier, contentAlignment = Alignment.Center) {
-        // Thumbnail is ALWAYS the base layer (same box/scale as the animation), so
-        // the sticker is never blank — not while scrolling, and not during the gap
-        // before Lottie parses / WEBM buffers. The animation is overlaid on top once
-        // ready. (The previous either/or layout made stickers vanish in that gap.)
-        val staticPath = thumbPath
-            ?: path.takeIf { sticker.format is TdApi.StickerFormatWebp }
+        val staticPath = thumbPath ?: path.takeIf { sticker.format is TdApi.StickerFormatWebp }
         if (staticPath != null) {
             AsyncImage(
                 model = File(staticPath),
@@ -115,17 +111,12 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
                 modifier = Modifier.fillMaxSize(),
             )
         }
-        if (animating) {
-            when (sticker.format) {
-                is TdApi.StickerFormatTgs -> TgsView(path!!, play = true)
-                is TdApi.StickerFormatWebm -> WebmView(path!!)
-                else -> AsyncImage(
-                    model = File(path!!),
-                    contentDescription = sticker.emoji,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+        when {
+            // TGS always animates via rlottie when visible; [play]=false (scrolling)
+            // makes it hold the last frame, not swap to a thumbnail.
+            isTgs && path != null -> TgsView(path, play)
+            isWebm && play && path != null && hasSlot -> WebmView(path)
+            // static WEBP is already shown as the base image above.
         }
     }
 }

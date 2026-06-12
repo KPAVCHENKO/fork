@@ -33,7 +33,12 @@ data class UiMessage(
     val reactions: List<UiReaction> = emptyList(),
     /** Источник пересланного сообщения («канал/имя»), иначе null. */
     val forwardFrom: String? = null,
+    /** Медиа альбома (несколько фото/видео одним постом); null для одиночных. */
+    val albumMedia: List<AlbumItem> = emptyList(),
 )
+
+/** Один элемент альбома: контент + id сообщения (для открытия просмотрщика). */
+data class AlbumItem(val messageId: Long, val content: TdApi.MessageContent)
 
 /** Статус исходящего сообщения для галочек. */
 enum class OutStatus { NONE, SENDING, FAILED, SENT, READ }
@@ -714,19 +719,41 @@ object MessageStore {
 
     private fun doRebuild() {
         val snapshot = synchronized(lock) { msgs.toList() }
-        _messages.value = snapshot.mapIndexed { i, m ->
+        // Merge consecutive album members (same non-zero mediaAlbumId) into one unit.
+        val units = ArrayList<List<TdApi.Message>>()
+        var u = 0
+        while (u < snapshot.size) {
+            val m = snapshot[u]
+            if (m.mediaAlbumId != 0L) {
+                val group = ArrayList<TdApi.Message>().apply { add(m) }
+                var j = u + 1
+                while (j < snapshot.size && snapshot[j].mediaAlbumId == m.mediaAlbumId) {
+                    group.add(snapshot[j]); j++
+                }
+                units.add(group); u = j
+            } else {
+                units.add(listOf(m)); u++
+            }
+        }
+
+        _messages.value = units.mapIndexed { i, group ->
+            val m = group.first()
+            val album = group.size > 1
+            // For albums the caption lives on whichever member has one.
+            val captioned = group.firstOrNull { captionOf(it.content)?.isNotBlank() == true } ?: m
             val senderId = (m.senderId as? TdApi.MessageSenderUser)?.userId ?: 0L
-            val prev = snapshot.getOrNull(i - 1)
+            val prev = units.getOrNull(i - 1)?.first()
             val prevSenderId = (prev?.senderId as? TdApi.MessageSenderUser)?.userId ?: -1L
             val firstOfGroup = prev == null || prevSenderId != senderId || prev.isOutgoing != m.isOutgoing
-            val next = snapshot.getOrNull(i + 1)
+            val next = units.getOrNull(i + 1)?.first()
             val nextSenderId = (next?.senderId as? TdApi.MessageSenderUser)?.userId ?: -1L
             val lastOfGroup = next == null || nextSenderId != senderId || next.isOutgoing != m.isOutgoing
             val replyTo = m.replyTo as? TdApi.MessageReplyToMessage
             UiMessage(
                 id = m.id,
-                text = MessageFormat.contentText(m.content),
-                content = m.content,
+                text = if (album) captionOf(captioned.content).orEmpty()
+                else MessageFormat.contentText(m.content),
+                content = if (album) captioned.content else m.content,
                 time = MessageFormat.bubbleTime(m.date),
                 isMine = m.isOutgoing,
                 senderName = if (isGroup && !m.isOutgoing && senderId != 0L) {
@@ -755,8 +782,20 @@ object MessageStore {
                     UiReaction(e, r.totalCount, r.isChosen)
                 } ?: emptyList(),
                 forwardFrom = forwardLabel(m.forwardInfo),
+                albumMedia = if (album) {
+                    group.map { AlbumItem(it.id, it.content) }
+                } else emptyList(),
             )
         }
+    }
+
+    /** Текст подписи у медийного контента (или null). */
+    private fun captionOf(content: TdApi.MessageContent?): String? = when (content) {
+        is TdApi.MessagePhoto -> content.caption?.text
+        is TdApi.MessageVideo -> content.caption?.text
+        is TdApi.MessageAnimation -> content.caption?.text
+        is TdApi.MessageDocument -> content.caption?.text
+        else -> null
     }
 
     /** Источник пересланного сообщения: «Канал», «Имя» или скрытый отправитель. */
