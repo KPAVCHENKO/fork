@@ -46,6 +46,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,6 +68,7 @@ fun ChatListScreen(
     onSettings: () -> Unit,
     onOpenArchive: () -> Unit = {},
     onOpenProxy: () -> Unit = {},
+    bottomInset: Dp = 0.dp,
 ) {
     val chats by ChatStore.chatList.collectAsStateWithLifecycle()
     val archive by ChatStore.archiveList.collectAsStateWithLifecycle()
@@ -155,7 +158,10 @@ fun ChatListScreen(
                     }
                 }
             } else {
-                LazyColumn(Modifier.fillMaxSize()) {
+                LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = bottomInset),
+                ) {
                     if (page == 0 && archive.isNotEmpty()) {
                         item(key = "archive_entry", contentType = "archive") {
                             ArchiveEntry(count = archive.sumOf { it.unread }, onClick = onOpenArchive)
@@ -574,7 +580,7 @@ private fun SearchResults(onChatClick: (Long) -> Unit) {
         }
         return
     }
-    LazyColumn(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 86.dp)) {
         items(items, key = { it.id }) { chat ->
             ChatRow(chat = chat, onClick = { onChatClick(chat.id) })
         }

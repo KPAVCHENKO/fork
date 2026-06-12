@@ -709,6 +709,21 @@ object MessageStore {
     /** Текущий открытый чат (для пересылки и пр.). */
     fun currentChatId(): Long = synchronized(lock) { chatId }
 
+    /** Все фото/видео чата (включая элементы альбомов) в хронологическом порядке —
+     *  для листаемого полноэкранного просмотрщика. */
+    fun collectMedia(): List<app.fork.messenger.media.MediaTarget> {
+        val list = synchronized(lock) { msgs.sortedBy { it.id } }
+        val out = ArrayList<app.fork.messenger.media.MediaTarget>()
+        for (m in list) {
+            when (val c = m.content) {
+                is TdApi.MessagePhoto -> out.add(app.fork.messenger.media.MediaTarget.Photo(c.photo))
+                is TdApi.MessageVideo -> out.add(app.fork.messenger.media.MediaTarget.Video(c.video))
+                else -> {}
+            }
+        }
+        return out
+    }
+
     /** Голос в опросе (optionIds — выбранные варианты, пустой массив отзывает голос). */
     fun votePoll(messageId: Long, optionIds: IntArray) {
         val id = synchronized(lock) { chatId }

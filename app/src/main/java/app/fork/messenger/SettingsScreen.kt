@@ -53,7 +53,7 @@ import app.fork.messenger.update.UpdateState
 /** Настройки (Fork Design Spec §4.5): карточные группы, переключатель трёх стилей. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(onBack: () -> Unit, bottomInset: androidx.compose.ui.unit.Dp = 0.dp) {
     val context = LocalContext.current
     val myName by TdClient.myName.collectAsStateWithLifecycle()
     val updateState by UpdateManager.state.collectAsStateWithLifecycle()
@@ -125,6 +125,8 @@ fun SettingsScreen(onBack: () -> Unit) {
 
             SectionLabel("Оформление")
             SettingsCard {
+                FontSizeSetting()
+                Spacer(Modifier.height(8.dp))
                 AppearanceSection()
                 Row(
                     modifier = Modifier
@@ -190,8 +192,35 @@ fun SettingsScreen(onBack: () -> Unit) {
             SectionLabel("Обновления")
             SettingsCard { UpdateSection(updateState, context) }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(24.dp + bottomInset))
         }
+    }
+}
+
+/** Масштаб шрифта приложения — слайдер, мгновенно применяется ко всему тексту. */
+@Composable
+private fun FontSizeSetting() {
+    val scale by SettingsStore.fontScale.collectAsStateWithLifecycle()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Размер шрифта", style = MaterialTheme.typography.bodyLarge)
+            Text(
+                "${(scale * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+    androidx.compose.material3.Slider(
+        value = scale,
+        onValueChange = { SettingsStore.setFontScale((it * 20).toInt() / 20f) },
+        valueRange = 0.85f..1.40f,
+        steps = 10,
+    )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text("А", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Пример текста этого размера", style = MaterialTheme.typography.bodyMedium)
+        Text("А", style = MaterialTheme.typography.titleLarge)
     }
 }
 

@@ -40,6 +40,10 @@ object SettingsStore {
     private val _enterToSend = MutableStateFlow(false)
     val enterToSend: StateFlow<Boolean> = _enterToSend.asStateFlow()
 
+    /** Масштаб шрифта приложения (0.85..1.4). Умножается на системный в ForkTheme. */
+    private val _fontScale = MutableStateFlow(1f)
+    val fontScale: StateFlow<Float> = _fontScale.asStateFlow()
+
     // ---------- Обои чата (Fork Design Spec §3.8) ----------
 
     /** Обои по умолчанию для всех чатов. */
@@ -90,6 +94,7 @@ object SettingsStore {
         _dynamicColors.value = prefs.getBoolean(KEY_DYNAMIC, false)
         _notificationsEnabled.value = prefs.getBoolean(KEY_NOTIFICATIONS, true)
         _enterToSend.value = prefs.getBoolean(KEY_ENTER_SEND, false)
+        _fontScale.value = prefs.getFloat("font_scale", 1f).coerceIn(0.85f, 1.4f)
         _defaultWallpaper.value = prefs.getString("wallpaper_default", "glow") ?: "glow"
         _wallpaperDim.value = prefs.getFloat("wallpaper_dim", 0f)
     }
@@ -122,5 +127,10 @@ object SettingsStore {
     fun setEnterToSend(enabled: Boolean) {
         _enterToSend.value = enabled
         prefs.edit().putBoolean(KEY_ENTER_SEND, enabled).apply()
+    }
+
+    fun setFontScale(scale: Float) {
+        _fontScale.value = scale.coerceIn(0.85f, 1.4f)
+        prefs.edit().putFloat("font_scale", _fontScale.value).apply()
     }
 }

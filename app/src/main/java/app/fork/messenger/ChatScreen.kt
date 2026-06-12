@@ -570,7 +570,14 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
         )
 
         mediaTarget?.let { target ->
-            MediaViewer(target = target, onClose = { mediaTarget = null })
+            // Листаемый просмотрщик: собираем все медиа чата и открываем на нажатом.
+            val all = remember(target) { MessageStore.collectMedia() }
+            val list = if (all.isEmpty()) listOf(target) else all
+            val start = remember(list, target) {
+                val key = app.fork.messenger.media.mediaKey(target)
+                list.indexOfFirst { app.fork.messenger.media.mediaKey(it) == key }.coerceAtLeast(0)
+            }
+            MediaViewer(targets = list, startIndex = start, onClose = { mediaTarget = null })
         }
 
         if (showWallpaperSheet) {
@@ -1346,52 +1353,88 @@ private fun LinkPreviewCard(
     }
 }
 
-/** Сетка альбома (несколько фото/видео одним постом) — 2 колонки, квадратные ячейки. */
+/**
+ * Мозаика альбома (как в TG): элементы укладываются в ряды по 1–3, выровненные по ширине
+ * (justified) — в каждом ряду общая высота, ширины по пропорции. Так фото красиво
+ * замощают пузырь, а не идут унылым столбиком, и их удобно тапать/листать.
+ */
 @Composable
 private fun AlbumGrid(items: List<AlbumItem>, onOpenMedia: (MediaTarget) -> Unit) {
-    // Каждый элемент альбома в своём НАСТОЯЩЕМ соотношении сторон (как в TG), а не
-    // принудительный квадрат. Вертикальная лента — наиболее близко к TG для смешанных
-    // портрет/ландшафт медиагрупп.
+    val gap = 2.dp
+    val containerW = 250.dp
+    val aspects = remember(items) { items.map { albumAspect(it.content) } }
+    val rows = remember(aspects) { justifyAlbumRows(aspects) }
+
     Column(
         Modifier
-            .widthIn(max = 250.dp)
+            .widthIn(max = containerW)
             .clip(RoundedCornerShape(forkTokens.bubbleRadius - 3.dp)),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(gap),
     ) {
-        items.forEach { item -> AlbumCell(item, onOpenMedia) }
+        var idx = 0
+        rows.forEach { count ->
+            val rowAspects = aspects.subList(idx, idx + count)
+            val sumA = rowAspects.sum().coerceAtLeast(0.1f)
+            val rowH = (containerW - gap * (count - 1)) / sumA
+            Row(
+                Modifier.fillMaxWidth().height(rowH),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+            ) {
+                for (k in 0 until count) {
+                    val item = items[idx + k]
+                    Box(Modifier.weight(rowAspects[k]).fillMaxHeight()) {
+                        AlbumCell(item, onOpenMedia)
+                    }
+                }
+            }
+            idx += count
+        }
     }
+}
+
+/** Соотношение сторон элемента альбома (клампим, чтобы экстремальные не ломали мозаику). */
+private fun albumAspect(content: TdApi.MessageContent): Float {
+    val (w, h) = when (content) {
+        is TdApi.MessagePhoto -> content.photo.inlineSize()?.let { it.width to it.height } ?: (1 to 1)
+        is TdApi.MessageVideo -> content.video.width to content.video.height
+        else -> 1 to 1
+    }
+    return if (w <= 0 || h <= 0) 1f else (w.toFloat() / h).coerceIn(0.6f, 1.8f)
+}
+
+/** Жадно группирует элементы в ряды по 1–3 (целевая «ширина ряда» ~1.8 суммы аспектов). */
+private fun justifyAlbumRows(aspects: List<Float>): List<Int> {
+    val rows = ArrayList<Int>()
+    var i = 0
+    while (i < aspects.size) {
+        var count = 0
+        var sum = 0f
+        while (i + count < aspects.size && count < 3) {
+            sum += aspects[i + count]
+            count++
+            if (sum >= 1.8f) break
+        }
+        rows.add(count)
+        i += count
+    }
+    return rows
 }
 
 @Composable
 private fun AlbumCell(item: AlbumItem, onOpenMedia: (MediaTarget) -> Unit) {
-    val square = RoundedCornerShape(0.dp)
     when (val c = item.content) {
         is TdApi.MessagePhoto -> {
             val size = c.photo.inlineSize() ?: return
-            app.fork.messenger.media.MediaImage(
-                file = size.photo,
-                mini = c.photo.minithumbnail,
-                width = size.width,
-                height = size.height,
-                modifier = Modifier.fillMaxWidth(),
-                priority = 22,
-                shape = square,
-                bounded = false,
-            ) { onOpenMedia(MediaTarget.Photo(c.photo)) }
+            app.fork.messenger.media.MediaSquare(size.photo, c.photo.minithumbnail) {
+                onOpenMedia(MediaTarget.Photo(c.photo))
+            }
         }
         is TdApi.MessageVideo -> {
             Box(contentAlignment = Alignment.Center) {
                 c.video.thumbnail?.file?.let { thumb ->
-                    app.fork.messenger.media.MediaImage(
-                        file = thumb,
-                        mini = c.video.minithumbnail,
-                        width = c.video.width,
-                        height = c.video.height,
-                        modifier = Modifier.fillMaxWidth(),
-                        priority = 20,
-                        shape = square,
-                        bounded = false,
-                    ) { onOpenMedia(MediaTarget.Video(c.video)) }
+                    app.fork.messenger.media.MediaSquare(thumb, c.video.minithumbnail) {
+                        onOpenMedia(MediaTarget.Video(c.video))
+                    }
                 }
                 Box(
                     Modifier.size(40.dp).clip(CircleShape).background(Color(0x8C0E1424)),

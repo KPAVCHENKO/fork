@@ -27,7 +27,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.unit.sp
@@ -183,62 +182,61 @@ private fun HomeShell(
     onNewChat: () -> Unit,
 ) {
     var tab by rememberSaveable { mutableStateOf(0) }
-    Scaffold(
-        bottomBar = { ForkBottomBar(tab) { tab = it } },
-    ) { inner ->
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(bottom = inner.calculateBottomPadding()),
-        ) {
-            when (tab) {
-                0 -> {
-                    ChatListScreen(
-                        onChatClick = onOpenChat,
-                        onSettings = { tab = 2 },
-                        onOpenArchive = onOpenArchive,
-                        onOpenProxy = onOpenProxy,
-                    )
-                    NewChatFab(
-                        onClick = onNewChat,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(20.dp),
-                    )
-                }
-                1 -> ContactsScreen(onOpenChat = onOpenChat)
-                2 -> SettingsScreen(onBack = { tab = 0 })
-                3 -> ProfileScreen(onOpenChat = onOpenChat, onOpenSettings = { tab = 2 })
-            }
+    // Контент уходит ПОД плавающую панель (она прозрачная), но скроллится с этим нижним
+    // отступом, чтобы последние элементы вставали над панелью, а не прятались под ней.
+    val bottomInset = 86.dp
+    Box(Modifier.fillMaxSize()) {
+        when (tab) {
+            0 -> ChatListScreen(
+                onChatClick = onOpenChat,
+                onSettings = { tab = 2 },
+                onOpenArchive = onOpenArchive,
+                onOpenProxy = onOpenProxy,
+                bottomInset = bottomInset,
+            )
+            1 -> ContactsScreen(onOpenChat = onOpenChat, bottomInset = bottomInset)
+            2 -> SettingsScreen(onBack = { tab = 0 }, bottomInset = bottomInset)
+            3 -> ProfileScreen(onOpenChat = onOpenChat, onOpenSettings = { tab = 2 }, bottomInset = bottomInset)
         }
+        if (tab == 0) {
+            NewChatFab(
+                onClick = onNewChat,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 18.dp, bottom = 74.dp),
+            )
+        }
+        ForkBottomBar(tab, Modifier.align(Alignment.BottomCenter)) { tab = it }
     }
 }
 
-/** Плавающая «стеклянная» нижняя навигация (как в TG): скруглённая, полупрозрачная,
- *  компактная — занимает мало места и парит над фоном. */
+/** Плавающая «стеклянная» нижняя навигация (как в TG): скруглённая, ПРОЗРАЧНАЯ
+ *  (контент виден за ней), компактная — занимает мало места и парит над контентом. */
 @Composable
-private fun ForkBottomBar(current: Int, onSelect: (Int) -> Unit) {
+private fun ForkBottomBar(current: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
     val items = listOf(
         Triple(0, app.fork.messenger.ui.ForkIcons.Chats, "Чаты"),
         Triple(1, app.fork.messenger.ui.ForkIcons.Group, "Контакты"),
         Triple(2, app.fork.messenger.ui.ForkIcons.Settings, "Настройки"),
         Triple(3, app.fork.messenger.ui.ForkIcons.Person, "Профиль"),
     )
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(26.dp)
     Box(
-        Modifier
+        modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 22.dp, vertical = 8.dp),
+            .padding(horizontal = 26.dp, vertical = 7.dp),
     ) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(58.dp)
+                .height(50.dp) // на ~15% компактнее (было 58)
                 .clip(shape)
-                // Полупрозрачное «стекло» + тонкая светлая окантовка.
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.80f))
-                .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f), shape),
+                // Прозрачное «стекло»: фон чуть-чуть, чтобы кнопки читались, но контент
+                // за панелью просвечивал; тонкая светлая окантовка очерчивает форму.
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.42f))
+                .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f), shape),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             items.forEach { (i, icon, label) ->
@@ -254,9 +252,9 @@ private fun ForkBottomBar(current: Int, onSelect: (Int) -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.height(3.dp))
-                    Text(label, color = tint, style = MaterialTheme.typography.labelSmall, fontSize = 10.sp)
+                    Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(21.dp))
+                    Spacer(Modifier.height(2.dp))
+                    Text(label, color = tint, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp)
                 }
             }
         }

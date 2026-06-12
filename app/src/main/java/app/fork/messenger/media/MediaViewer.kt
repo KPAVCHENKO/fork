@@ -44,19 +44,29 @@ sealed interface MediaTarget {
     data class Video(val video: TdApi.Video) : MediaTarget
 }
 
-/** Полноэкранный просмотр фото (с зумом) и видео (ExoPlayer). */
+/** Одиночное медиа (без листания) — для экранов без списка (инфо чата и т.п.). */
 @Composable
-fun MediaViewer(target: MediaTarget, onClose: () -> Unit) {
+fun MediaViewer(target: MediaTarget, onClose: () -> Unit) = MediaViewer(listOf(target), 0, onClose)
+
+/** Ключ медиа по id файла — для поиска стартового индекса в списке. */
+fun mediaKey(t: MediaTarget): Long = when (t) {
+    is MediaTarget.Photo -> (t.photo.fullSize()?.photo?.id ?: t.photo.sizes.lastOrNull()?.photo?.id ?: 0).toLong()
+    is MediaTarget.Video -> t.video.video.id.toLong()
+}
+
+/**
+ * Полноэкранный просмотр с ЛИСТАНИЕМ между всеми медиа чата (свайп влево/вправо, как в
+ * TG). Фото — с зумом, видео — ExoPlayer. Кнопки сохранить/поделиться/копировать
+ * действуют на текущую страницу; сверху — счётчик «N / M».
+ */
+@Composable
+fun MediaViewer(targets: List<MediaTarget>, startIndex: Int, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
-    val isVideo = target is MediaTarget.Video
-    // Тот же файл, что показывает дочерний просмотрщик (одинаковый id → без повторной
-    // загрузки): нужен путь для кнопки «Сохранить в галерею».
-    val mainFile = when (target) {
-        is MediaTarget.Photo -> target.photo.fullSize()?.photo ?: target.photo.inlineSize()?.photo
-        is MediaTarget.Video -> target.video.video
-    }
-    val savePath = rememberFileState(mainFile, autoDownload = false, priority = 1).path
+    if (targets.isEmpty()) return
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(
+        initialPage = startIndex.coerceIn(0, targets.size - 1),
+    ) { targets.size }
 
     Box(
         Modifier
@@ -64,10 +74,24 @@ fun MediaViewer(target: MediaTarget, onClose: () -> Unit) {
             .background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
-        when (target) {
-            is MediaTarget.Photo -> PhotoViewer(target.photo)
-            is MediaTarget.Video -> VideoViewer(target.video)
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            pageSpacing = 16.dp,
+        ) { page ->
+            when (val t = targets[page]) {
+                is MediaTarget.Photo -> PhotoViewer(t.photo)
+                is MediaTarget.Video -> VideoViewer(t.video)
+            }
         }
+
+        val current = targets[pagerState.currentPage]
+        val isVideo = current is MediaTarget.Video
+        val mainFile = when (current) {
+            is MediaTarget.Photo -> current.photo.fullSize()?.photo ?: current.photo.inlineSize()?.photo
+            is MediaTarget.Video -> current.video.video
+        }
+        val savePath = rememberFileState(mainFile, autoDownload = false, priority = 1).path
 
         IconButton(
             onClick = onClose,
@@ -77,6 +101,18 @@ fun MediaViewer(target: MediaTarget, onClose: () -> Unit) {
                 .padding(8.dp),
         ) {
             Icon(ForkIcons.ArrowBack, contentDescription = "закрыть", tint = Color.White)
+        }
+
+        if (targets.size > 1) {
+            Text(
+                "${pagerState.currentPage + 1} / ${targets.size}",
+                color = Color.White,
+                style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .systemBarsPadding()
+                    .padding(top = 16.dp),
+            )
         }
 
         if (savePath != null) {

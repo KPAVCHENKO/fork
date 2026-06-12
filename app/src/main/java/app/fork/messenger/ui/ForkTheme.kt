@@ -407,7 +407,19 @@ fun ForkTheme(content: @Composable () -> Unit) {
         }
     }
 
-    CompositionLocalProvider(LocalForkTokens provides tokens) {
+    // Пользовательский масштаб шрифта: множим ТОЛЬКО fontScale у Density (sp),
+    // dp-размеры не трогаем — текст крупнее, а вёрстка не ломается.
+    val userFontScale by SettingsStore.fontScale.collectAsStateWithLifecycle()
+    val baseDensity = androidx.compose.ui.platform.LocalDensity.current
+    val scaledDensity = androidx.compose.ui.unit.Density(
+        density = baseDensity.density,
+        fontScale = baseDensity.fontScale * userFontScale,
+    )
+
+    CompositionLocalProvider(
+        LocalForkTokens provides tokens,
+        androidx.compose.ui.platform.LocalDensity provides scaledDensity,
+    ) {
         MaterialTheme(colorScheme = scheme, typography = ForkTypography, content = content)
     }
 }

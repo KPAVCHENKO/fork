@@ -39,7 +39,11 @@ import org.drinkless.tdlib.TdApi
 
 /** Вкладка «Профиль» (как в TG): аватар, имя, статус, телефон/username/био + действия. */
 @Composable
-fun ProfileScreen(onOpenChat: (Long) -> Unit, onOpenSettings: () -> Unit) {
+fun ProfileScreen(
+    onOpenChat: (Long) -> Unit,
+    onOpenSettings: () -> Unit,
+    bottomInset: androidx.compose.ui.unit.Dp = 0.dp,
+) {
     var user by remember { mutableStateOf<TdApi.User?>(null) }
     var bio by remember { mutableStateOf("") }
     var refresh by remember { mutableIntStateOf(0) }
@@ -133,7 +137,7 @@ fun ProfileScreen(onOpenChat: (Long) -> Unit, onOpenSettings: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(24.dp + bottomInset))
     }
 
     if (showEdit && u != null) {

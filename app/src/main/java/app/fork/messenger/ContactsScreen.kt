@@ -42,7 +42,7 @@ import app.fork.messenger.ui.forkTokens
 /** Вкладка «Контакты» (как в TG): поиск + список контактов, тап — открыть личный чат. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ContactsScreen(onOpenChat: (Long) -> Unit) {
+fun ContactsScreen(onOpenChat: (Long) -> Unit, bottomInset: androidx.compose.ui.unit.Dp = 0.dp) {
     LaunchedEffect(Unit) { ContactsStore.load() }
     val contacts by ContactsStore.contacts.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
@@ -112,7 +112,10 @@ fun ContactsScreen(onOpenChat: (Long) -> Unit) {
             }
             return
         }
-        LazyColumn(Modifier.fillMaxSize()) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = bottomInset),
+        ) {
             items(filtered, key = { it.userId }) { c ->
                 ContactRow(c) { ContactsStore.openChat(c.userId, onOpenChat) }
             }
