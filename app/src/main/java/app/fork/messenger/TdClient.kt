@@ -76,6 +76,9 @@ object TdClient {
     private var watchdogJob: kotlinx.coroutines.Job? = null
     /** Last time we re-selected a proxy; gates re-selection so it cannot churn. */
     @Volatile private var lastSelectionMs = 0L
+    /** True once we've connected DIRECTLY while a VPN is active — makes direct sticky so
+     *  a brief blip never auto-switches us to a proxy (that broke loading under VPN). */
+    @Volatile private var vpnDirectConnected = false
 
     /** Wall-clock at process start, for per-phase connection timing logs. */
     @Volatile private var connectStartMs = 0L
@@ -177,12 +180,16 @@ object TdClient {
                 Log.i("ForkConnect", "${obj.state.javaClass.simpleName} @ +${elapsed}ms")
                 if (obj.state is TdApi.ConnectionStateReady) {
                     watchdogJob?.cancel()
-                    // Connection is up — refresh the proxy entries' "active" marker.
+                    // We connected. If a VPN is active, this is a DIRECT connection —
+                    // mark it sticky so we never auto-switch to a proxy afterwards.
                     if (::appContext.isInitialized) {
+                        if (app.fork.messenger.net.NetworkMonitor.isVpnActive()) {
+                            vpnDirectConnected = true
+                        }
                         app.fork.messenger.net.ProxyPool.refreshEntries(appContext)
                     }
                 } else {
-                    armProxyWatchdog(initialDelayMs = 12_000)
+                    armReconnect(initialDelayMs = 12_000)
                 }
             }
 
@@ -320,9 +327,11 @@ object TdClient {
         if (!::appContext.isInitialized) return
         if (app.fork.messenger.net.NetworkMonitor.isVpnActive()) {
             // A VPN already bypasses the block — connect directly (no proxy) to avoid
-            // the extra proxy hop's latency. Fall back to a proxy if direct fails.
+            // the extra proxy hop's latency. Fall back to the primary proxy if direct
+            // doesn't come up (some VPNs don't actually route Telegram).
             app.fork.messenger.net.ProxyPool.goDirect(appContext)
-            armProxyWatchdog(initialDelayMs = 7_000)
+            watchdogJob?.cancel()
+            armVpnFallback()
         } else {
             // Enable the primary proxy IMMEDIATELY (no round-trip) so it is active for
             // TDLib's very first connection attempt — avoids a doomed direct attempt
@@ -333,31 +342,38 @@ object TdClient {
 
     /**
      * VPN toggled. When ON, connect directly (the VPN bypasses the block, so a proxy
-     * only adds latency); a proxy is re-enabled automatically if direct doesn't come
-     * up. When OFF, re-enable the proxy (needed again against the DPI block).
+     * only adds latency); the primary proxy is re-enabled if direct doesn't come up.
+     * When OFF, re-enable the proxy (needed again against the DPI block).
      */
     fun onVpnChanged(vpn: Boolean) {
         if (!::appContext.isInitialized) return
         watchdogJob?.cancel()
         lastSelectionMs = 0L
+        vpnDirectConnected = false
         if (vpn) {
             app.fork.messenger.net.ProxyPool.goDirect(appContext)
-            armProxyWatchdog(initialDelayMs = 7_000) // fallback to proxy if direct fails
+            armVpnFallback() // direct, with a patient one-time proxy fallback
         } else {
             app.fork.messenger.net.ProxyPool.enablePrimaryFast(appContext)
-            armProxyWatchdog(initialDelayMs = 12_000)
+            armReconnect(initialDelayMs = 12_000)
         }
     }
 
     /**
-     * Failover watchdog: while we are NOT connected, periodically pick a working
-     * proxy from the pool. Gated by [lastSelectionMs] so a selection runs at most
-     * ~once per 25s — it can recover from a dead/blocked proxy (incl. when a VPN is
-     * toggled) without ever churning a handshake that is simply in progress.
+     * Reconnect strategy, VPN-aware. Without a VPN we churn the pool to find any proxy
+     * that beats the DPI block. WITH a VPN we go DIRECT and keep it: once a direct
+     * connection has come up we never auto-switch to a proxy (a brief blip recovers on
+     * its own — switching to a proxy under a VPN was what broke loading).
      */
-    private fun armProxyWatchdog(initialDelayMs: Long) {
-        if (watchdogJob?.isActive == true) return
+    private fun armReconnect(initialDelayMs: Long) {
         if (!::appContext.isInitialized) return
+        if (watchdogJob?.isActive == true) return
+        if (app.fork.messenger.net.NetworkMonitor.isVpnActive()) {
+            // Already connected directly once → leave it alone, TDLib recovers itself.
+            if (vpnDirectConnected) return
+            armVpnFallback()
+            return
+        }
         watchdogJob = watchdogScope.launch {
             kotlinx.coroutines.delay(initialDelayMs)
             while (_connectionState.value != "подключено") {
@@ -371,16 +387,33 @@ object TdClient {
     }
 
     /**
+     * VPN fallback: we went direct. A VPN that routes Telegram connects directly within
+     * a few seconds, so we wait patiently; ONLY if direct has never come up after a long
+     * grace do we try the primary proxy once. Once direct connects ([vpnDirectConnected]),
+     * this never switches us away — that auto-switch is what stopped everything loading.
+     */
+    private fun armVpnFallback() {
+        if (!::appContext.isInitialized) return
+        watchdogJob = watchdogScope.launch {
+            kotlinx.coroutines.delay(20_000)
+            if (!vpnDirectConnected && _connectionState.value != "подключено") {
+                Log.i(TAG, "vpn: direct never connected in 20s; trying primary proxy once")
+                app.fork.messenger.net.ProxyPool.enablePrimaryFast(appContext)
+            }
+        }
+    }
+
+    /**
      * Called by NetworkMonitor when the device network changes (incl. VPN on/off).
      * NetworkMonitor already pushed the new network type. If the active proxy stops
-     * working on the new network, re-select soon so a VPN-compatible proxy is chosen.
+     * working on the new network, re-select soon (VPN-aware via [armReconnect]).
      */
     fun onNetworkChanged() {
         if (!::appContext.isInitialized) return
         if (_connectionState.value == "подключено") return // active proxy still works
         watchdogJob?.cancel()
         lastSelectionMs = 0L // a real network change justifies an immediate re-select
-        armProxyWatchdog(initialDelayMs = 5_000)
+        armReconnect(initialDelayMs = 5_000)
     }
 
     private fun humanReadableError(error: TdApi.Error): String = when (error.message) {

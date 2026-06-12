@@ -151,6 +151,7 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
     val amoled by SettingsStore.amoled.collectAsStateWithLifecycle()
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var topMenuOpen by remember { mutableStateOf(false) }
+    var showClearConfirm by remember { mutableStateOf(false) }
     var stickerSetId by remember { mutableStateOf<Long?>(null) }
 
     // Назад: сперва закрыть клавиатуру, потом выбор/поиск, и только потом выйти из чата.
@@ -341,12 +342,30 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                     onDismissRequest = { topMenuOpen = false },
                                 ) {
                                     androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Профиль") },
+                                        onClick = { topMenuOpen = false; onOpenInfo(chatId) },
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
                                         text = { Text("Фон чата") },
                                         onClick = { topMenuOpen = false; showWallpaperSheet = true },
                                     )
                                     androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text("Профиль") },
-                                        onClick = { topMenuOpen = false; onOpenInfo(chatId) },
+                                        text = { Text(if (MessageStore.isMuted(chatId)) "Включить звук" else "Без звука") },
+                                        onClick = {
+                                            topMenuOpen = false
+                                            MessageStore.toggleMute(chatId, !MessageStore.isMuted(chatId))
+                                        },
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Отметить непрочитанным") },
+                                        onClick = {
+                                            topMenuOpen = false
+                                            MessageStore.toggleUnread(chatId, true)
+                                        },
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Очистить историю") },
+                                        onClick = { topMenuOpen = false; showClearConfirm = true },
                                     )
                                 }
                             }
@@ -442,9 +461,10 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                                     else selection.add(message.id)
                                 },
                                 onOpenStickerSet = { stickerSetId = it },
-                                // Always animate (like Telegram) — frame updates are
-                                // draw-phase only, so they don't block scrolling.
-                                animateStickers = true,
+                                // TGS animate always (rlottie, cheap). WEBM video
+                                // stickers (ExoPlayer/SurfaceView) only when idle, so a
+                                // fling never spins up several SurfaceViews at once.
+                                animateStickers = !isScrolling,
                             )
                         }
                     }
@@ -547,6 +567,58 @@ fun ChatScreen(chatId: Long, onBack: () -> Unit, onOpenInfo: (Long) -> Unit) {
                 onPick = { MessageStore.sendSticker(it) },
             )
         }
+
+        TranslationDialog()
+
+        if (showClearConfirm) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showClearConfirm = false },
+                title = { Text("Очистить историю?") },
+                text = { Text("Все сообщения в этом чате будут удалены у вас.") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        MessageStore.clearHistory(chatId)
+                        showClearConfirm = false
+                    }) { Text("Очистить") }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showClearConfirm = false }) {
+                        Text("Отмена")
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** Диалог перевода сообщения (TDLib TranslateMessageText). */
+@Composable
+private fun TranslationDialog() {
+    val translation by MessageStore.translation.collectAsStateWithLifecycle()
+    translation?.let { t ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { MessageStore.clearTranslation() },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { MessageStore.clearTranslation() }) {
+                    Text("Закрыть")
+                }
+            },
+            title = { Text("Перевод") },
+            text = {
+                if (t.loading) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text("Переводим…")
+                    }
+                } else {
+                    Text(t.text ?: "Не удалось перевести")
+                }
+            },
+        )
     }
 }
 
@@ -1195,38 +1267,47 @@ private fun LinkPreviewCard(
 /** Сетка альбома (несколько фото/видео одним постом) — 2 колонки, квадратные ячейки. */
 @Composable
 private fun AlbumGrid(items: List<AlbumItem>, onOpenMedia: (MediaTarget) -> Unit) {
+    // Каждый элемент альбома в своём НАСТОЯЩЕМ соотношении сторон (как в TG), а не
+    // принудительный квадрат. Вертикальная лента — наиболее близко к TG для смешанных
+    // портрет/ландшафт медиагрупп.
     Column(
         Modifier
             .widthIn(max = 250.dp)
             .clip(RoundedCornerShape(forkTokens.bubbleRadius - 3.dp)),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        items.chunked(2).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                row.forEach { item ->
-                    Box(Modifier.weight(1f).aspectRatio(1f)) { AlbumCell(item, onOpenMedia) }
-                }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
+        items.forEach { item -> AlbumCell(item, onOpenMedia) }
     }
 }
 
 @Composable
 private fun AlbumCell(item: AlbumItem, onOpenMedia: (MediaTarget) -> Unit) {
+    val square = RoundedCornerShape(0.dp)
     when (val c = item.content) {
         is TdApi.MessagePhoto -> {
             val size = c.photo.inlineSize() ?: return
-            app.fork.messenger.media.MediaSquare(size.photo, c.photo.minithumbnail) {
-                onOpenMedia(MediaTarget.Photo(c.photo))
-            }
+            app.fork.messenger.media.MediaImage(
+                file = size.photo,
+                mini = c.photo.minithumbnail,
+                width = size.width,
+                height = size.height,
+                modifier = Modifier.fillMaxWidth(),
+                priority = 22,
+                shape = square,
+            ) { onOpenMedia(MediaTarget.Photo(c.photo)) }
         }
         is TdApi.MessageVideo -> {
             Box(contentAlignment = Alignment.Center) {
                 c.video.thumbnail?.file?.let { thumb ->
-                    app.fork.messenger.media.MediaSquare(thumb, c.video.minithumbnail) {
-                        onOpenMedia(MediaTarget.Video(c.video))
-                    }
+                    app.fork.messenger.media.MediaImage(
+                        file = thumb,
+                        mini = c.video.minithumbnail,
+                        width = c.video.width,
+                        height = c.video.height,
+                        modifier = Modifier.fillMaxWidth(),
+                        priority = 20,
+                        shape = square,
+                    ) { onOpenMedia(MediaTarget.Video(c.video)) }
                 }
                 Box(
                     Modifier.size(40.dp).clip(CircleShape).background(Color(0x8C0E1424)),
@@ -1454,6 +1535,16 @@ private fun captionText(content: TdApi.MessageContent?): String? {
     return caption?.text?.takeIf { it.isNotBlank() }
 }
 
+/** Удаляет последний графемный кластер (эмодзи могут быть из нескольких код-поинтов). */
+private fun dropLastGrapheme(s: String): String {
+    if (s.isEmpty()) return s
+    val bi = java.text.BreakIterator.getCharacterInstance()
+    bi.setText(s)
+    bi.last()
+    val prev = bi.previous()
+    return if (prev == java.text.BreakIterator.DONE || prev <= 0) "" else s.substring(0, prev)
+}
+
 @Composable
 private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
     var text by rememberSaveable(chatId) { mutableStateOf("") }
@@ -1508,7 +1599,11 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
     val reply by MessageStore.reply.collectAsStateWithLifecycle()
     val editing by MessageStore.editing.collectAsStateWithLifecycle()
     val enterToSend by SettingsStore.enterToSend.collectAsStateWithLifecycle()
-    var showStickers by remember { mutableStateOf(false) }
+    var showPanel by remember { mutableStateOf(false) }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val inputFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    // Открытие панели прячет клавиатуру — как в TG, снизу одно общее пространство.
+    LaunchedEffect(showPanel) { if (showPanel) keyboard?.hide() }
 
     // Вход в режим редактирования — подставляем текст сообщения в поле.
     LaunchedEffect(editing) {
@@ -1596,19 +1691,33 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
                             maxLines = 5,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .onFocusChanged { onFocusChanged(it.isFocused) },
+                                .focusRequester(inputFocus)
+                                .onFocusChanged {
+                                    // Тап по полю → показать клавиатуру вместо панели.
+                                    if (it.isFocused) showPanel = false
+                                    onFocusChanged(it.isFocused)
+                                },
                         )
                     }
                     IconButton(
-                        onClick = { showStickers = !showStickers },
+                        onClick = {
+                            if (showPanel) {
+                                // Панель открыта → вернуть клавиатуру.
+                                showPanel = false
+                                inputFocus.requestFocus()
+                                keyboard?.show()
+                            } else {
+                                showPanel = true
+                            }
+                        },
                         modifier = Modifier.size(52.dp),
                     ) {
                         Icon(
-                            ForkIcons.Sticker,
-                            contentDescription = "стикеры",
-                            tint = if (showStickers) MaterialTheme.colorScheme.primary
+                            if (showPanel) ForkIcons.Keyboard else ForkIcons.Smile,
+                            contentDescription = if (showPanel) "клавиатура" else "эмодзи и стикеры",
+                            tint = if (showPanel) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(21.dp),
+                            modifier = Modifier.size(22.dp),
                         )
                     }
                 }
@@ -1630,15 +1739,24 @@ private fun MessageInput(chatId: Long, onFocusChanged: (Boolean) -> Unit = {}) {
                             text = ""
                         }
                     },
+                    onSendWhenOnline = {
+                        if (editing == null && text.isNotBlank()) {
+                            MessageStore.sendText(text, sendWhenOnline = true)
+                            text = ""
+                        }
+                    },
                     context = context,
                 )
             }
-            if (showStickers) {
-                // Back closes the sticker panel instead of leaving the chat.
-                BackHandler { showStickers = false }
-                app.fork.messenger.media.StickerPanel(onPick = { sticker ->
-                    MessageStore.sendSticker(sticker)
-                })
+            if (showPanel) {
+                // Back closes the panel instead of leaving the chat.
+                BackHandler { showPanel = false }
+                app.fork.messenger.media.ContentPanel(
+                    onSticker = { MessageStore.sendSticker(it) },
+                    onGif = { MessageStore.sendGif(it) },
+                    onEmoji = { emoji -> text += emoji },
+                    onBackspace = { text = dropLastGrapheme(text) },
+                )
             }
         }
     }
@@ -1655,6 +1773,7 @@ private fun SendMicButton(
     onSend: () -> Unit,
     onSendSilent: () -> Unit = onSend,
     onSendScheduled: (Int) -> Unit = {},
+    onSendWhenOnline: () -> Unit = {},
     context: android.content.Context,
 ) {
     val tokens = forkTokens
@@ -1747,6 +1866,10 @@ private fun SendMicButton(
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text("Отправить без звука") },
                 onClick = { sendMenu = false; onSendSilent() },
+            )
+            androidx.compose.material3.DropdownMenuItem(
+                text = { Text("Когда появится в сети") },
+                onClick = { sendMenu = false; onSendWhenOnline() },
             )
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text("Отправить через час") },

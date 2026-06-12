@@ -3,6 +3,7 @@ package app.fork.messenger.media
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,18 +25,29 @@ import org.drinkless.tdlib.TdApi
 /** Панель стикеров: наборы с заголовками, сетка стикеров, тап — отправить. */
 @Composable
 fun StickerPanel(onPick: (TdApi.Sticker) -> Unit) {
-    LaunchedEffect(Unit) { StickerStore.loadOnce() }
-    val sections by StickerStore.sections.collectAsStateWithLifecycle()
-
-    // Разворачиваем секции в плоский список: заголовок занимает всю строку.
-    val items = rememberFlatten(sections)
-
     Box(
         Modifier
             .fillMaxWidth()
             .height(300.dp)
             .background(MaterialTheme.colorScheme.surface),
     ) {
+        StickerGrid(onPick)
+    }
+}
+
+/**
+ * Сетка стикеров без фиксированной высоты/фона — заполняет родителя. Используется
+ * как вкладка «Стикеры» в объединённой панели эмодзи/GIF/стикеры.
+ */
+@Composable
+fun StickerGrid(onPick: (TdApi.Sticker) -> Unit) {
+    LaunchedEffect(Unit) { StickerStore.loadOnce() }
+    val sections by StickerStore.sections.collectAsStateWithLifecycle()
+
+    // Разворачиваем секции в плоский список: заголовок занимает всю строку.
+    val items = rememberFlatten(sections)
+
+    Box(Modifier.fillMaxSize()) {
         if (items.isEmpty()) {
             Text(
                 "Загрузка стикеров…",
@@ -44,7 +56,7 @@ fun StickerPanel(onPick: (TdApi.Sticker) -> Unit) {
             )
             return@Box
         }
-        LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.fillMaxWidth()) {
+        LazyVerticalGrid(columns = GridCells.Fixed(4), modifier = Modifier.fillMaxSize()) {
             items(items, span = { item ->
                 if (item is PanelItem.Header) GridItemSpan(maxLineSpan) else GridItemSpan(1)
             }) { item ->

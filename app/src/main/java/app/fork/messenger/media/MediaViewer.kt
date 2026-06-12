@@ -1,5 +1,6 @@
 package app.fork.messenger.media
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -47,6 +48,16 @@ sealed interface MediaTarget {
 @Composable
 fun MediaViewer(target: MediaTarget, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
+    val context = LocalContext.current
+    val isVideo = target is MediaTarget.Video
+    // Тот же файл, что показывает дочерний просмотрщик (одинаковый id → без повторной
+    // загрузки): нужен путь для кнопки «Сохранить в галерею».
+    val mainFile = when (target) {
+        is MediaTarget.Photo -> target.photo.fullSize()?.photo ?: target.photo.inlineSize()?.photo
+        is MediaTarget.Video -> target.video.video
+    }
+    val savePath = rememberFileState(mainFile, autoDownload = false, priority = 1).path
+
     Box(
         Modifier
             .fillMaxSize()
@@ -67,8 +78,102 @@ fun MediaViewer(target: MediaTarget, onClose: () -> Unit) {
         ) {
             Icon(ForkIcons.ArrowBack, contentDescription = "закрыть", tint = Color.White)
         }
+
+        if (savePath != null) {
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .systemBarsPadding()
+                    .padding(4.dp),
+            ) {
+                if (!isVideo) {
+                    IconButton(onClick = {
+                        val ok = copyImage(context, savePath)
+                        android.widget.Toast.makeText(
+                            context, if (ok) "Скопировано" else "Не удалось скопировать",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }) {
+                        Icon(ForkIcons.Copy, contentDescription = "копировать", tint = Color.White)
+                    }
+                }
+                IconButton(onClick = { shareMedia(context, savePath, isVideo) }) {
+                    Icon(ForkIcons.Forward, contentDescription = "поделиться", tint = Color.White)
+                }
+                IconButton(onClick = {
+                    val ok = saveToGallery(context, savePath, isVideo)
+                    android.widget.Toast.makeText(
+                        context,
+                        if (ok) "Сохранено в галерею" else "Не удалось сохранить",
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }) {
+                    Icon(ForkIcons.Download, contentDescription = "сохранить", tint = Color.White)
+                }
+            }
+        }
     }
 }
+
+/** Делится медиа через системный диалог (FileProvider). */
+private fun shareMedia(context: android.content.Context, srcPath: String, isVideo: Boolean) {
+    runCatching {
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context, "${context.packageName}.fileprovider", File(srcPath),
+        )
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = if (isVideo) "video/*" else "image/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Поделиться").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
+    }
+}
+
+/** Копирует изображение в буфер обмена. */
+private fun copyImage(context: android.content.Context, srcPath: String): Boolean = runCatching {
+    val uri = androidx.core.content.FileProvider.getUriForFile(
+        context, "${context.packageName}.fileprovider", File(srcPath),
+    )
+    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+        as android.content.ClipboardManager
+    val clip = android.content.ClipData.newUri(context.contentResolver, "image", uri)
+    clipboard.setPrimaryClip(clip)
+    true
+}.getOrDefault(false)
+
+/** Сохраняет скачанный медиафайл в галерею (Pictures/Fork или Movies/Fork). */
+private fun saveToGallery(context: android.content.Context, srcPath: String, isVideo: Boolean): Boolean =
+    runCatching {
+        val src = File(srcPath)
+        if (!src.exists()) return false
+        val name = "Fork_${System.currentTimeMillis()}." + if (isVideo) "mp4" else "jpg"
+        val resolver = context.contentResolver
+        val collection = if (isVideo) {
+            android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        } else {
+            android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+        }
+        val values = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, if (isVideo) "video/mp4" else "image/jpeg")
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                val dir = if (isVideo) android.os.Environment.DIRECTORY_MOVIES else android.os.Environment.DIRECTORY_PICTURES
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "$dir/Fork")
+                put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+        }
+        val uri = resolver.insert(collection, values) ?: return false
+        resolver.openOutputStream(uri)?.use { out -> src.inputStream().use { it.copyTo(out) } } ?: return false
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            values.clear()
+            values.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        }
+        true
+    }.getOrDefault(false)
 
 @Composable
 private fun PhotoViewer(photo: TdApi.Photo) {

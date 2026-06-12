@@ -44,6 +44,11 @@
             android:name=".update.InstallResultReceiver"
             android:exported="false" />
 
+        <!-- Действия из уведомлений: быстрый ответ и «Прочитано» -->
+        <receiver
+            android:name=".notify.NotificationActionReceiver"
+            android:exported="false" />
+
         <!-- Доступ к скачанным файлам для внешних приложений (открытие документов) -->
         <provider
             android:name="androidx.core.content.FileProvider"

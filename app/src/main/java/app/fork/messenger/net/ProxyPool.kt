@@ -49,6 +49,7 @@ object ProxyPool {
     private const val TEST_BATCH = 4          // batch size for "check all" (avoids storms)
     private const val LIVE_TRY_MS = 8000L     // wait for the real connection per candidate
     private const val PING_TIMEOUT_MS = 6000L
+    private const val PING_SAMPLES = 3        // samples per proxy; keep the best (speed rank)
 
     /** Public channel that posts working proxies (user-provided). */
     private const val PROXY_CHANNEL = "telemtfreeproxy"
@@ -102,6 +103,22 @@ object ProxyPool {
         return result.values.toList()
     }
 
+    /**
+     * Failover order: OUR primary ALWAYS first, then the rest fastest-first by measured
+     * latency (unknown/untested last). So we lead with the reliable primary and, if it
+     * is down, fall through to the quickest known proxy rather than a random one.
+     */
+    private fun orderedForFailover(context: Context): List<Candidate> {
+        val primaryKey = primaryCandidate(context)?.key
+        val all = candidates(context)
+        val primary = all.filter { it.key == primaryKey }
+        val rest = all.filterNot { it.key == primaryKey }.sortedBy { c ->
+            val lat = status[c.key]?.second ?: -1
+            if (lat <= 0) Int.MAX_VALUE else lat
+        }
+        return primary + rest
+    }
+
     private fun primaryCandidate(context: Context): Candidate? {
         val p = ProxyConfig.current(context)
         if (p.host.isNotBlank() && p.port != 0 && p.secret.isNotBlank()) {
@@ -130,7 +147,11 @@ object ProxyPool {
                 lastCheckedAt = st?.third ?: 0L,
             )
         }
-        _entries.value = list
+        // Primary pinned to the top, then fastest-first by latency (untested last).
+        _entries.value = list.sortedWith(
+            compareByDescending<ProxyEntry> { it.source == Source.PRIMARY }
+                .thenBy { if (it.latencyMs <= 0) Int.MAX_VALUE else it.latencyMs },
+        )
     }
 
     // ---------- Startup / cleanup (used by TdClient) ----------
@@ -141,7 +162,10 @@ object ProxyPool {
      * proxy if set, otherwise the primary.
      */
     fun enablePrimaryFast(context: Context) {
-        val chosen = pinned(context) ?: primaryCandidate(context) ?: return
+        // ALWAYS lead with OUR primary proxy (user: «изначально всегда наш прокси,
+        // и только потом другие»). The manual pin only applies when there is no
+        // primary configured, or when the user taps a proxy in the manager.
+        val chosen = primaryCandidate(context) ?: pinned(context) ?: return
         _activeKey.value = chosen.key
         TdClient.send(TdApi.AddProxy(proxyOf(chosen), true, "Fork"))
         refreshEntries(context)
@@ -179,7 +203,7 @@ object ProxyPool {
      */
     fun selectWorking(context: Context, reason: String) {
         if (selecting) return
-        val cands = candidates(context)
+        val cands = orderedForFailover(context)
         if (cands.isEmpty()) return
         selecting = true
         scope.launch {
@@ -222,9 +246,10 @@ object ProxyPool {
                 for (batch in cands.chunked(TEST_BATCH)) {
                     batch.map { c ->
                         async {
-                            // PingProxy returns the REAL round-trip latency (like Telegram),
-                            // unlike TestProxy whose wall-time includes the whole handshake.
-                            val (ok, ms) = pingOne(c)
+                            // Best-of-N PingProxy = real round-trip latency (like Telegram),
+                            // ranks proxies by speed; TestProxy wall-time would fold in the
+                            // whole handshake and gives false negatives under load.
+                            val (ok, ms) = bestPing(c)
                             val finalOk = ok || (connected && c.key == active)
                             status[c.key] = Triple(finalOk, if (ok) ms else -1, System.currentTimeMillis())
                             refreshEntries(context)
@@ -250,6 +275,25 @@ object ProxyPool {
             else deferred.complete(false to -1)
         }
         return withTimeoutOrNull(PING_TIMEOUT_MS) { deferred.await() } ?: (false to -1)
+    }
+
+    /**
+     * "Speed" probe used to RANK proxies (user: «помимо пинга надо чтобы скорость была
+     * наивысшая»). A single PingProxy can catch a slow/contended handshake; we sample a
+     * few times and keep the BEST round-trip, which reflects the proxy's real reachable
+     * speed far better than one shot. The lowest value sorts to the top of the pool.
+     */
+    private suspend fun bestPing(c: Candidate): Pair<Boolean, Int> {
+        var ok = false
+        var best = Int.MAX_VALUE
+        repeat(PING_SAMPLES) {
+            val (o, ms) = pingOne(c)
+            if (o) {
+                ok = true
+                if (ms in 1 until best) best = ms
+            }
+        }
+        return if (ok) true to best else false to -1
     }
 
     /** Make a specific candidate the single enabled proxy. */
@@ -328,7 +372,7 @@ object ProxyPool {
                     for (batch in toTest.chunked(TEST_BATCH)) {
                         batch.map { cand ->
                             async {
-                                val (ok, ms) = pingOne(cand)
+                                val (ok, ms) = bestPing(cand)
                                 status[cand.key] = Triple(ok, if (ok) ms else -1, System.currentTimeMillis())
                                 if (ok) synchronized(good) { good += cand }
                             }

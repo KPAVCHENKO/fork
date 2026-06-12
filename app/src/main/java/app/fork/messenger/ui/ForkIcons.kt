@@ -113,6 +113,30 @@ object ForkIcons {
         icon("Down", "M7.41 8.59L12 13.17l4.59,-4.58L18 10l-6 6,-6,-6z")
     }
 
+    /** Клавиатура — переключение панель ⇄ клавиатура в поле ввода. */
+    val Keyboard: ImageVector by lazy {
+        icon(
+            "Keyboard",
+            "M20 5H4c-1.1 0,-1.99 0.9,-1.99 2L2 17c0 1.1 0.9 2 2 2h16c1.1 0 2,-0.9 2,-2V7c0,-1.1 -0.9,-2 -2,-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0,-3H5V8h2v2zm9 7H8v-2h8v2zm0,-4h-2v-2h2v2zm0,-3h-2V8h2v2zm3 3h-2v-2h2v2zm0,-3h-2V8h2v2z",
+        )
+    }
+
+    /** Значок GIF — вкладка гифок в панели. */
+    val Gif: ImageVector by lazy {
+        icon(
+            "Gif",
+            "M11.5 9H13v6h-1.5V9zM9 9H6c-0.6 0,-1 0.5,-1 1v4c0 0.5 0.4 1 1 1h3c0.6 0 1,-0.5 1,-1v-2H8.5v1.5h-2v-3H10V10c0,-0.5 -0.4,-1 -1,-1zm10 1.5V9h-4.5v6H16v-2h2v-1.5h-2v-1.5h3z",
+        )
+    }
+
+    /** Backspace — удалить последний символ в панели эмодзи. */
+    val Backspace: ImageVector by lazy {
+        icon(
+            "Backspace",
+            "M22 3H7c-0.69 0,-1.23 0.35,-1.59 0.88L0 12l5.41 8.11c0.36 0.53 0.9 0.89 1.59 0.89h15c1.1 0 2,-0.9 2,-2V5c0,-1.1 -0.9,-2 -2,-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z",
+        )
+    }
+
     /** Смайлик для поля ввода. */
     val Smile: ImageVector by lazy {
         icon(
@@ -178,6 +202,13 @@ object ForkIcons {
 
     val Forward: ImageVector by lazy {
         icon("Forward", "M12 8V4l8 8,-8 8v-4H4V8z")
+    }
+
+    val Copy: ImageVector by lazy {
+        icon(
+            "Copy",
+            "M16 1H4c-1.1 0,-2 0.9,-2 2v14h2V3h12V1zm3 4H8c-1.1 0,-2 0.9,-2 2v14c0 1.1 0.9 2 2 2h11c1.1 0 2,-0.9 2,-2V7c0,-1.1 -0.9,-2 -2,-2zm0 16H8V7h11v14z",
+        )
     }
 
     val ForkMark: ImageVector by lazy {

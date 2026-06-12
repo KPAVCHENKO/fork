@@ -369,6 +369,52 @@ object MessageStore {
 
     fun isViewing(id: Long): Boolean = synchronized(lock) { chatId == id }
 
+    /** Отправляет текст в произвольный чат (для быстрого ответа из уведомления). */
+    fun sendTextTo(chatId: Long, text: String) {
+        if (chatId == 0L || text.isBlank()) return
+        TdClient.send(
+            TdApi.SendMessage().apply {
+                this.chatId = chatId
+                inputMessageContent = TdApi.InputMessageText(
+                    TdApi.FormattedText(text.trim(), null), null, true,
+                )
+            },
+        )
+    }
+
+    /** Помечает чат прочитанным по последнему сообщению (для действия в уведомлении). */
+    fun markChatRead(chatId: Long) {
+        val last = ChatStore.chat(chatId)?.lastMessage?.id ?: return
+        TdClient.send(TdApi.ViewMessages(chatId, longArrayOf(last), null, true))
+    }
+
+    /** Очищает историю чата (у себя). */
+    fun clearHistory(chatId: Long) {
+        if (chatId == 0L) return
+        TdClient.send(TdApi.DeleteChatHistory(chatId, false, false))
+    }
+
+    /** Включает/выключает звук чата (бессрочно). */
+    fun toggleMute(chatId: Long, mute: Boolean) {
+        if (chatId == 0L) return
+        val cur = ChatStore.chat(chatId)?.notificationSettings ?: TdApi.ChatNotificationSettings()
+        cur.useDefaultMuteFor = false
+        cur.muteFor = if (mute) Int.MAX_VALUE else 0
+        TdClient.send(TdApi.SetChatNotificationSettings(chatId, cur))
+    }
+
+    /** Помечает чат (не)прочитанным вручную. */
+    fun toggleUnread(chatId: Long, unread: Boolean) {
+        if (chatId == 0L) return
+        TdClient.send(TdApi.ToggleChatIsMarkedAsUnread(chatId, unread))
+    }
+
+    /** Текущее состояние «без звука» для чата. */
+    fun isMuted(chatId: Long): Boolean {
+        val s = ChatStore.chat(chatId)?.notificationSettings ?: return false
+        return !s.useDefaultMuteFor && s.muteFor > 0
+    }
+
     /**
      * Marks messages up to [messageId] as read (forceRead), as the user scrolls them
      * into view. This is what clears the unread counter — opening at the unread anchor
@@ -453,7 +499,12 @@ object MessageStore {
      * Отправка текста. silent — без звука у получателя;
      * scheduleAtUnix > 0 — отложенная отправка в указанное время.
      */
-    fun sendText(text: String, silent: Boolean = false, scheduleAtUnix: Int = 0) {
+    fun sendText(
+        text: String,
+        silent: Boolean = false,
+        scheduleAtUnix: Int = 0,
+        sendWhenOnline: Boolean = false,
+    ) {
         val id = synchronized(lock) { chatId }
         if (id == 0L || text.isBlank()) return
         val message = TdApi.SendMessage().apply {
@@ -463,17 +514,45 @@ object MessageStore {
                 null,
                 true,
             )
-            if (silent || scheduleAtUnix > 0) {
+            if (silent || scheduleAtUnix > 0 || sendWhenOnline) {
                 options = TdApi.MessageSendOptions().apply {
                     disableNotification = silent
-                    if (scheduleAtUnix > 0) {
-                        schedulingState = TdApi.MessageSchedulingStateSendAtDate(scheduleAtUnix, 0)
+                    schedulingState = when {
+                        sendWhenOnline -> TdApi.MessageSchedulingStateSendWhenOnline()
+                        scheduleAtUnix > 0 -> TdApi.MessageSchedulingStateSendAtDate(scheduleAtUnix, 0)
+                        else -> null
                     }
                 }
             }
         }
         TdClient.send(message)
         // Сообщение появится через updateNewMessage со статусом отправки.
+    }
+
+    // ---------- Перевод сообщений ----------
+
+    data class Translation(val messageId: Long, val text: String?, val loading: Boolean)
+
+    private val _translation = MutableStateFlow<Translation?>(null)
+    val translation: StateFlow<Translation?> = _translation.asStateFlow()
+
+    /** Переводит текст сообщения на язык интерфейса (TDLib TranslateMessageText). */
+    fun translateMessage(messageId: Long) {
+        val id = synchronized(lock) { chatId }
+        if (id == 0L) return
+        _translation.value = Translation(messageId, null, loading = true)
+        val lang = java.util.Locale.getDefault().language.ifBlank { "ru" }
+        TdClient.send(TdApi.TranslateMessageText(id, messageId, lang, "")) { res ->
+            _translation.value = when (res) {
+                is TdApi.FormattedText -> Translation(messageId, res.text, false)
+                is TdApi.Error -> Translation(messageId, "Не удалось перевести: ${res.message}", false)
+                else -> Translation(messageId, "Не удалось перевести", false)
+            }
+        }
+    }
+
+    fun clearTranslation() {
+        _translation.value = null
     }
 
     fun sendPhoto(path: String, width: Int, height: Int, caption: String = "") {
@@ -523,6 +602,24 @@ object MessageStore {
                 sticker.width,
                 sticker.height,
                 sticker.emoji,
+            )
+        )
+    }
+
+    fun sendGif(animation: TdApi.Animation) {
+        val remoteId = animation.animation.remote?.id
+        if (remoteId.isNullOrBlank()) return
+        send(
+            TdApi.InputMessageAnimation(
+                TdApi.InputFileRemote(remoteId),
+                null,
+                IntArray(0),
+                animation.duration,
+                animation.width,
+                animation.height,
+                null,
+                false,
+                false,
             )
         )
     }

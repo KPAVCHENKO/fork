@@ -7,13 +7,21 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +60,7 @@ fun MessageRow(
     val scope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
     var menuOpen by remember { mutableStateOf(false) }
+    var reactionPicker by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
 
     // Режим выбора: тап и долгое нажатие переключают отметку, меню не открывается.
@@ -152,6 +161,10 @@ fun MessageRow(
                     }
                 }
                 DropdownMenuItem(
+                    text = { Text("Ещё реакции…") },
+                    onClick = { menuOpen = false; reactionPicker = true },
+                )
+                DropdownMenuItem(
                     text = { Text("Ответить") },
                     onClick = { MessageStore.startReply(message.id); menuOpen = false },
                 )
@@ -175,6 +188,10 @@ fun MessageRow(
                             clipboard.setText(AnnotatedString(message.text))
                             menuOpen = false
                         },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Перевести") },
+                        onClick = { MessageStore.translateMessage(message.id); menuOpen = false },
                     )
                 }
                 DropdownMenuItem(
@@ -201,6 +218,46 @@ fun MessageRow(
                         text = { Text("Удалить у себя") },
                         onClick = { MessageStore.deleteMessage(message.id, false); menuOpen = false },
                     )
+                }
+            }
+        }
+    }
+
+    if (reactionPicker) {
+        ReactionPickerSheet(
+            onPick = { emoji -> MessageStore.toggleReaction(message.id, emoji); reactionPicker = false },
+            onDismiss = { reactionPicker = false },
+        )
+    }
+}
+
+/** Полный пикер реакций — сетка популярных эмодзи (как «+» в Telegram). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReactionPickerSheet(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val reactions = remember {
+        listOf(
+            "👍", "👎", "❤️", "🔥", "🥰", "👏", "😁", "🤔", "🤯", "😱", "🤬", "😢",
+            "🎉", "🤩", "🙏", "👌", "🕊", "🤡", "🥱", "🥴", "😍", "🐳", "❤️‍🔥", "🌚",
+            "💯", "🤣", "⚡", "🍌", "🏆", "💔", "🤨", "😐", "🍓", "🍾", "💋", "🖕",
+            "😈", "😴", "😭", "🤓", "👻", "👀", "🙈", "😇", "🤝", "✍️", "🫡", "🗿",
+        )
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(8),
+            modifier = Modifier
+                .padding(horizontal = 8.dp)
+                .heightIn(max = 320.dp),
+        ) {
+            items(reactions) { emoji ->
+                Box(
+                    Modifier
+                        .aspectRatio(1f)
+                        .clickable { onPick(emoji) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(emoji, fontSize = 26.sp)
                 }
             }
         }

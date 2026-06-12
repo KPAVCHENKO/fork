@@ -61,7 +61,7 @@ fun TdApi.Photo.fullSize(): TdApi.PhotoSize? =
 // Показываем фото в его реальном соотношении сторон (как в Telegram), а не режем
 // под узкий диапазон. Клампим лишь крайности, чтобы пузырь не был гигантским.
 private fun aspect(width: Int, height: Int): Float =
-    if (width <= 0 || height <= 0) 1f else (width.toFloat() / height).coerceIn(0.55f, 1.9f)
+    if (width <= 0 || height <= 0) 1f else (width.toFloat() / height).coerceIn(0.45f, 2.2f)
 
 /** Картинка медиа: показывает мини-превью сразу, поверх — полный файл по мере загрузки. */
 @Composable
@@ -433,10 +433,22 @@ fun StickerContent(
     size: androidx.compose.ui.unit.Dp = 140.dp,
     onClick: (() -> Unit)? = null,
 ) {
+    // Сохраняем пропорции стикера (как в TG): самая длинная сторона = [size], короткая
+    // пропорционально. Раньше был жёсткий квадрат [size]×[size] → не-квадратные стикеры
+    // растягивались/сжимались.
+    val w = sticker.width
+    val h = sticker.height
+    val boxW: androidx.compose.ui.unit.Dp
+    val boxH: androidx.compose.ui.unit.Dp
+    when {
+        w <= 0 || h <= 0 -> { boxW = size; boxH = size }
+        w >= h -> { boxW = size; boxH = size * (h.toFloat() / w) }
+        else -> { boxW = size * (w.toFloat() / h); boxH = size }
+    }
     StickerView(
         sticker,
         modifier = Modifier
-            .size(size)
+            .size(width = boxW, height = boxH)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         play = play,
     )
