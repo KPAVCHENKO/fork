@@ -8,6 +8,10 @@
     native <methods>;
 }
 
+# rlottie JNI: C++ ищет Java_app_fork_messenger_media_RLottie_* по точному имени —
+# класс переименовывать нельзя.
+-keep class app.fork.messenger.media.RLottie { *; }
+
 # --- Kotlin coroutines: служебные поля для отладки не нужны ---
 -dontwarn kotlinx.coroutines.debug.**
 

@@ -29,3 +29,10 @@ export CFLAGS="-std=gnu17"
 
 export ANDROID_SDK_ROOT_WIN="C:/Android"
 export TDLIB_NDK_VERSION="23.2.8568313"
+
+# --- rlottie (native TGS sticker engine, added v0.21.0) ---
+# Source cloned into third_party/rlottie (gitignored, like td). To rebuild from a
+# fresh checkout:
+#   git clone --depth 1 https://github.com/Samsung/rlottie.git third_party/rlottie
+# It is compiled by Gradle's externalNativeBuild (app/src/main/cpp/CMakeLists.txt)
+# into libforklottie.so for arm64-v8a + x86_64 — no manual build step needed.

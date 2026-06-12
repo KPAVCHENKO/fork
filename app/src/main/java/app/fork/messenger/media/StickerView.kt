@@ -117,7 +117,7 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
         }
         if (animating) {
             when (sticker.format) {
-                is TdApi.StickerFormatTgs -> TgsView(path!!)
+                is TdApi.StickerFormatTgs -> TgsView(path!!, play = true)
                 is TdApi.StickerFormatWebm -> WebmView(path!!)
                 else -> AsyncImage(
                     model = File(path!!),
@@ -131,7 +131,7 @@ fun StickerView(sticker: TdApi.Sticker, modifier: Modifier = Modifier, play: Boo
 }
 
 @Composable
-private fun TgsView(path: String) {
+private fun TgsView(path: String, play: Boolean) {
     val json by produceState<String?>(tgsJsonCache.get(path), path) {
         if (value == null) {
             value = withContext(Dispatchers.IO) {
@@ -143,12 +143,19 @@ private fun TgsView(path: String) {
         }
     }
     val data = json ?: return
-    val composition by rememberLottieComposition(LottieCompositionSpec.JsonString(data))
-    LottieAnimation(
-        composition = composition,
-        iterations = LottieConstants.IterateForever,
-        modifier = Modifier.fillMaxSize(),
-    )
+    if (RLottie.available) {
+        // Native rlottie — the same engine Telegram uses; renders frames off the UI
+        // thread for smooth playback on weak devices.
+        RLottieView(rawJson = data, modifier = Modifier.fillMaxSize(), play = play)
+    } else {
+        // Fallback to lottie-compose if the native lib failed to load.
+        val composition by rememberLottieComposition(LottieCompositionSpec.JsonString(data))
+        LottieAnimation(
+            composition = composition,
+            iterations = LottieConstants.IterateForever,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
 }
 
 @OptIn(UnstableApi::class)

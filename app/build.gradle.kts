@@ -19,17 +19,27 @@ fun prop(name: String, default: String): String = localProps.getProperty(name)?.
 android {
     namespace = "app.fork.messenger"
     compileSdk = 36
+    // NDK used to build TDLib; reused to compile rlottie (native TGS sticker engine).
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "app.fork.messenger"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.20.0"
+        versionCode = 23
+        versionName = "0.21.0"
 
         // Только ABI, для которых собрана TDLib (см. tdlib/src/main/jniLibs)
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+
+        // Native rlottie engine for TGS stickers (см. src/main/cpp).
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++14"
+                arguments += "-DANDROID_STL=c++_static"
+            }
         }
 
         // Секреты берутся из local.properties и НЕ попадают в git
@@ -81,6 +91,13 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 }
 
