@@ -17,7 +17,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -152,19 +158,75 @@ private fun MainNavigation() {
             onBack = { openChatId = null },
             onOpenInfo = { infoChatId = it },
         )
-        else -> Box(Modifier.fillMaxSize()) {
-            ChatListScreen(
-                onChatClick = { openChatId = it },
-                onSettings = { showSettings = true },
-                onOpenArchive = { showArchive = true },
-                onOpenProxy = { showProxy = true },
-            )
-            NewChatFab(
-                onClick = { showNewChat = true },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(20.dp),
+        else -> HomeShell(
+            onOpenChat = { openChatId = it },
+            onOpenArchive = { showArchive = true },
+            onOpenProxy = { showProxy = true },
+            onNewChat = { showNewChat = true },
+        )
+    }
+}
+
+/** Корневая оболочка с нижней навигацией (как в TG): Чаты · Контакты · Настройки · Профиль. */
+@Composable
+private fun HomeShell(
+    onOpenChat: (Long) -> Unit,
+    onOpenArchive: () -> Unit,
+    onOpenProxy: () -> Unit,
+    onNewChat: () -> Unit,
+) {
+    var tab by rememberSaveable { mutableStateOf(0) }
+    Scaffold(
+        bottomBar = { ForkBottomBar(tab) { tab = it } },
+    ) { inner ->
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(bottom = inner.calculateBottomPadding()),
+        ) {
+            when (tab) {
+                0 -> {
+                    ChatListScreen(
+                        onChatClick = onOpenChat,
+                        onSettings = { tab = 2 },
+                        onOpenArchive = onOpenArchive,
+                        onOpenProxy = onOpenProxy,
+                    )
+                    NewChatFab(
+                        onClick = onNewChat,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(20.dp),
+                    )
+                }
+                1 -> ContactsScreen(onOpenChat = onOpenChat)
+                2 -> SettingsScreen(onBack = { tab = 0 })
+                3 -> ProfileScreen(onOpenChat = onOpenChat, onOpenSettings = { tab = 2 })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForkBottomBar(current: Int, onSelect: (Int) -> Unit) {
+    val items = listOf(
+        Triple(0, app.fork.messenger.ui.ForkIcons.Chats, "Чаты"),
+        Triple(1, app.fork.messenger.ui.ForkIcons.Group, "Контакты"),
+        Triple(2, app.fork.messenger.ui.ForkIcons.Settings, "Настройки"),
+        Triple(3, app.fork.messenger.ui.ForkIcons.Person, "Профиль"),
+    )
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+        items.forEach { (i, icon, label) ->
+            NavigationBarItem(
+                selected = current == i,
+                onClick = { onSelect(i) },
+                icon = { Icon(icon, contentDescription = label, modifier = Modifier.size(24.dp)) },
+                label = { Text(label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                ),
             )
         }
     }
